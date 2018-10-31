@@ -19,10 +19,12 @@
 using System;
 using System.Xml.XPath;
 
+using Microsoft.Ddue.Tools.BuildComponent;
+
 namespace Microsoft.Ddue.Tools.Targets
 {
     /// <summary>
-    /// This class is used to hold reference link information used by by the
+    /// This class is used to hold reference link information used by the
     /// <see cref="ResolveReferenceLinksComponent"/>.
     /// </summary>
     public class ReferenceLinkInfo
@@ -34,7 +36,7 @@ namespace Microsoft.Ddue.Tools.Targets
         public string Target { get; private set; }
 
         /// <summary>This read-only property returns the display target of the link</summary>
-        public string DisplayTarget { get; private set; }
+        public string DisplayTarget { get; internal set; }
 
         /// <summary>This read-only property returns the display options for the link</summary>
         public DisplayOptions DisplayOptions { get; private set; }
@@ -49,7 +51,7 @@ namespace Microsoft.Ddue.Tools.Targets
         public bool RenderAsLink { get; private set; }
 
         /// <summary>This read-only property returns the contents of the link</summary>
-        public XPathNavigator Contents { get; private set; }
+        public XPathNavigator Contents { get; internal set; }
         #endregion
 
         #region Methods, etc.

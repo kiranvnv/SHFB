@@ -15,13 +15,13 @@
 		<msxsl:using namespace="System.Text.RegularExpressions" />
 		<![CDATA[
 			// This is used to generate GUID filenames (MD5 hashes in GUID form)
-			private static HashAlgorithm md5 = HashAlgorithm.Create("MD5");
+			private static HashAlgorithm md5;
 
 			// The reflection file can contain tens of thousands of entries for large assemblies.  HashSet<T> is much
 			// faster at lookups than List<T>.
 			private static HashSet<string> filenames = new HashSet<string>();
 
-			private static Regex reInvalidChars = new Regex("[ :.`#<>*?]");
+			private static Regex reInvalidChars = new Regex("[ :.`#<>*?|]");
 
 			// Convert a member ID to a filename based on the given naming method
 			public static string GetFileName(string id, string namingMethod)
@@ -32,6 +32,10 @@
 
 					if(namingMethod == "Guid")
 					{
+							// Create on first use to prevent issues if FIPS is enabled
+							if(md5 == null)
+								md5 = HashAlgorithm.Create("MD5");
+
 							byte[] input = Encoding.UTF8.GetBytes(id);
 							byte[] output = md5.ComputeHash(input);
 							Guid guid = new Guid(output);
@@ -92,23 +96,17 @@
 
 	<xsl:template match="/">
 		<reflection>
-			<xsl:apply-templates select="/reflection/assemblies" />
-			<xsl:apply-templates select="/reflection/apis" />
+			<xsl:copy-of select="/reflection/@*"/>
+			<xsl:copy-of select="/reflection/assemblies" />
+			<apis>
+				<xsl:apply-templates select="/reflection/apis/api" />
+			</apis>
 		</reflection>
 	</xsl:template>
 
-	<xsl:template match="assemblies">
-		<xsl:copy-of select="." />
-	</xsl:template>
-
-	<xsl:template match="apis">
-		<apis>
-			<xsl:apply-templates select="api" />
-		</apis>
-	</xsl:template>
-
 	<xsl:template match="api">
-		<api id="{@id}">
+		<api>
+			<xsl:copy-of select="@*" />
 			<xsl:copy-of select="*" />
 			<file name="{ddue:GetFileName(@id, $namingMethod)}" />
 		</api>

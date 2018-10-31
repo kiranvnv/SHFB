@@ -2,8 +2,8 @@
 // System  : Sandcastle Help File Builder Visual Studio Package
 // File    : TopicIdCache.cs
 // Author  : Eric Woodruff  (Eric@EWoodruff.us)
-// Updated : 01/09/2015
-// Note    : Copyright 2014-2015, Eric Woodruff, All rights reserved
+// Updated : 09/02/2018
+// Note    : Copyright 2014-2018, Eric Woodruff, All rights reserved
 // Compiler: Microsoft Visual C#
 //
 // This file contains the class used to cache information about MAML topic IDs and their related files
@@ -157,8 +157,8 @@ namespace SandcastleBuilder.Package.GoToDefinition
 
                     if(File.Exists(filePath))
                     {
-                        // TODO: Can it find an open content layout editor for the file if there is one and
-                        // search its content instead?
+                        // The file content may not be current if the file is open for editing but I can't be
+                        // bothered to add the code to go look for the open editor and get it from there yet.
                         var doc = XDocument.Load(filePath);
 
                         // Add or refresh the title information
@@ -227,7 +227,7 @@ namespace SandcastleBuilder.Package.GoToDefinition
         {
             this.IsIndexingTopics = true;
 
-            Task.Factory.StartNew(() => this.IndexTopics(folders));
+            var t = Task.Run(() => this.IndexTopics(folders));
         }
 
         /// <summary>

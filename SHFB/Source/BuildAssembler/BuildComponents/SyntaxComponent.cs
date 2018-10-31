@@ -13,6 +13,7 @@
 // be edited.
 // 04/27/2014 - EFW - Added support for grouping and sorting code snippets based on the order of the defined
 // syntax generators.
+// 03/28/2018 - EFW - Made some changes to set the title to the language ID for unrecognized languages
 
 using System;
 using System.ComponentModel.Composition;
@@ -20,11 +21,11 @@ using System.ComponentModel.Composition.Hosting;
 using System.Collections.Generic;
 using System.Configuration;
 using System.Linq;
-using System.Windows.Forms;
 using System.Xml;
 using System.Xml.Linq;
 using System.Xml.XPath;
 
+using Sandcastle.Core;
 using Sandcastle.Core.BuildAssembler;
 using Sandcastle.Core.BuildAssembler.BuildComponent;
 using Sandcastle.Core.BuildAssembler.SyntaxGenerator;
@@ -32,7 +33,7 @@ using Sandcastle.Core.BuildAssembler.SyntaxGenerator;
 using Microsoft.Ddue.Tools.UI;
 using Microsoft.Ddue.Tools.Snippets;
 
-namespace Microsoft.Ddue.Tools
+namespace Microsoft.Ddue.Tools.BuildComponent
 {
     /// <summary>
     /// This build component is used to generate syntax sections for API member topics
@@ -63,41 +64,35 @@ namespace Microsoft.Ddue.Tools
             public Factory()
             {
                 // Replace the existing instance for reference builds
-                base.ReferenceBuildPlacement = new ComponentPlacement(PlacementAction.Replace, "Syntax Component");
+                this.ReferenceBuildPlacement = new ComponentPlacement(PlacementAction.Replace, "Syntax Component");
 
                 // Place it before the transform component in conceptual builds if not there already
-                base.ConceptualBuildPlacement = new ComponentPlacement(PlacementAction.Before,
+                this.ConceptualBuildPlacement = new ComponentPlacement(PlacementAction.Before,
                     "XSL Transform Component");
             }
 
             /// <inheritdoc />
             public override BuildComponentCore Create()
             {
-                return new SyntaxComponent(base.BuildAssembler, this.SyntaxGenerators);
+                return new SyntaxComponent(this.BuildAssembler, this.SyntaxGenerators);
             }
 
             /// <inheritdoc />
-            public override string DefaultConfiguration
-            {
-                get
-                {
-                    return @"<syntax input=""/document/reference"" output=""/document/syntax"" renderReferenceLinks=""false"" />
+            public override string DefaultConfiguration =>
+@"<syntax input=""/document/reference"" output=""/document/syntax"" renderReferenceLinks=""false"" />
 <generators>
     {@SyntaxFilters}
 </generators>
 <containerElement name=""codeSnippetGroup"" addNoExampleTabs=""true"" includeOnSingleSnippets=""false""
     groupingEnabled=""{@CodeSnippetGrouping}"" />";
-                }
-            }
 
             /// <inheritdoc />
             public override string ConfigureComponent(string currentConfiguration, CompositionContainer container)
             {
-                using(var dlg = new SyntaxComponentConfigDlg(currentConfiguration, container))
-                {
-                    if(dlg.ShowDialog() == DialogResult.OK)
-                        currentConfiguration = dlg.Configuration;
-                }
+                var dlg = new SyntaxComponentConfigDlg(currentConfiguration, container);
+
+                if(dlg.ShowModalDialog() ?? false)
+                    currentConfiguration = dlg.Configuration;
 
                 return currentConfiguration;
             }
@@ -115,7 +110,6 @@ namespace Microsoft.Ddue.Tools
         private List<SyntaxGeneratorCore> generators = new List<SyntaxGeneratorCore>();
 
         // Code snippet grouping and sorting members
-        private XmlNamespaceManager context;
         private XPathExpression referenceRoot, referenceCode, conceptualRoot, conceptualCode;
         private string containerElementName;
         private Dictionary<string, ISyntaxGeneratorMetadata> codeSnippetLanguages;
@@ -206,12 +200,12 @@ namespace Microsoft.Ddue.Tools
                 string id = generatorNode.GetAttribute("id", String.Empty);
 
                 if(String.IsNullOrWhiteSpace(id))
-                    base.WriteMessage(MessageLevel.Error, "Each generator element must have an id attribute");
+                    this.WriteMessage(MessageLevel.Error, "Each generator element must have an id attribute");
 
                 var generatorFactory = generatorFactories.FirstOrDefault(g => g.Metadata.Id == id);
 
                 if(generatorFactory == null)
-                    base.WriteMessage(MessageLevel.Error, "A syntax generator with the ID '{0}' could not be found", id);
+                    this.WriteMessage(MessageLevel.Error, "A syntax generator with the ID '{0}' could not be found", id);
 
                 // Track the languages for grouping
                 generatorLanguages.Add(generatorFactory.Metadata.Id);
@@ -249,13 +243,13 @@ namespace Microsoft.Ddue.Tools
                 }
                 catch(Exception ex)
                 {
-                    base.WriteMessage(MessageLevel.Error, "An error occurred while attempting to instantiate " +
+                    this.WriteMessage(MessageLevel.Error, "An error occurred while attempting to instantiate " +
                         "the '{0}' syntax generator. The error message is: {1}{2}", id, ex.Message,
                         ex.InnerException != null ? "\r\n" + ex.InnerException.Message : String.Empty);
                 }
             }
 
-            base.WriteMessage(MessageLevel.Info, "Loaded {0} syntax generators.", generators.Count);
+            this.WriteMessage(MessageLevel.Info, "Loaded {0} syntax generators.", generators.Count);
 
             // If this is not found or set, we'll assume the presentation style does not support grouping
             var containerElement = configuration.SelectSingleNode("containerElement");
@@ -287,16 +281,19 @@ namespace Microsoft.Ddue.Tools
                     includeOnSingleSnippets = false;
 
                 // Create the XPath queries used for code snippet grouping and sorting
-                context = new CustomContext();
+                var context = new CustomContext();
+
                 context.AddNamespace("ddue", "http://ddue.schemas.microsoft.com/authoring/2003/5");
+
                 referenceRoot = XPathExpression.Compile("document/comments|document/syntax");
                 referenceCode = XPathExpression.Compile("//code|//div[@codeLanguage]");
+
                 conceptualRoot = XPathExpression.Compile("document/topic");
                 conceptualCode = XPathExpression.Compile("//ddue:code|//ddue:snippet");
                 conceptualCode.SetContext(context);
 
                 // Hook up the event handler to group and sort code snippets just prior to XSL transformation
-                base.BuildAssembler.ComponentEvent += TransformComponent_TopicTransforming;
+                this.BuildAssembler.ComponentEvent += TransformComponent_TopicTransforming;
             }
         }
 
@@ -339,10 +336,10 @@ namespace Microsoft.Ddue.Tools
             string namespaceUri;
             int order;
 
-            // Don't bother if not a transforming event
+            // Don't bother if not a transforming event or not in our group
             TransformingTopicEventArgs tt = e as TransformingTopicEventArgs;
 
-            if(tt == null)
+            if(tt == null || ((BuildComponentCore)sender).GroupId != this.GroupId)
                 return;
 
             XmlDocument document = tt.Document;
@@ -365,7 +362,7 @@ namespace Microsoft.Ddue.Tools
 
                 if(root == null)
                 {
-                    base.WriteMessage(tt.Key, MessageLevel.Warn, "Root content node not found.  Cannot group " +
+                    this.WriteMessage(tt.Key, MessageLevel.Warn, "Root content node not found.  Cannot group " +
                         "and sort code snippets.");
                     return;
                 }
@@ -399,7 +396,7 @@ namespace Microsoft.Ddue.Tools
                 {
                     // A div indicates a syntax section so we must reuse the parent element rather than replace
                     // it as they are already grouped.
-                    snippetGroup = new CodeSnippetGroup((XmlElement)code.ParentNode);
+                    snippetGroup = new CodeSnippetGroup((XmlElement)code.ParentNode) { IsSyntaxSection = true };
                     allGroups.Add(snippetGroup);
                 }
 
@@ -438,8 +435,21 @@ namespace Microsoft.Ddue.Tools
 
                         if(snippet.CodeElement.Attributes["title"] == null)
                         {
+                            string friendlyName = " ";
+
+                            if(!snippet.Language.Equals("none", StringComparison.OrdinalIgnoreCase) &&
+                              !snippet.Language.Equals("other", StringComparison.OrdinalIgnoreCase))
+                            {
+                                // If we have a set of shared language IDs, see if it's in there so that we can
+                                // get a human-readable name.  If not, we'll use the language ID as the title.
+                                var languageIds = (IReadOnlyDictionary<string, string>)BuildComponentCore.Data["LanguageIds"];
+
+                                if(languageIds == null || !languageIds.TryGetValue(snippet.Language, out friendlyName))
+                                    friendlyName = snippet.Language;
+                            }
+
                             attribute = document.CreateAttribute("title");
-                            attribute.Value = " ";
+                            attribute.Value = friendlyName;
                             snippet.CodeElement.Attributes.Append(attribute);
                         }
                     }
@@ -466,8 +476,7 @@ namespace Microsoft.Ddue.Tools
                         if(snippetCount != 1)
                         {
                             snippetGroup = new CodeSnippetGroup(document.CreateElement(containerElementName,
-                                namespaceUri));
-                            snippetGroup.IsStandalone = true;
+                                namespaceUri)) { IsStandalone = true };
 
                             allGroups.Insert(groupInsertionPoint++, snippetGroup);
 
@@ -501,6 +510,20 @@ namespace Microsoft.Ddue.Tools
                     foreach(var langSet in group.CodeSnippets.GroupBy(c => c.KeywordStyleParameter).Where(
                       g => g.Count() != 1).ToList())
                     {
+                        // For syntax sections, merge common language snippets into a single section
+                        if(group.IsSyntaxSection)
+                        {
+                            var firstSnippet = langSet.First();
+
+                            foreach(var snippet in langSet.Skip(1))
+                            {
+                                firstSnippet.CodeElement.InnerXml += "\r\n\r\n" + snippet.CodeElement.InnerXml;
+                                group.CodeSnippets.Remove(snippet);
+                            }
+
+                            continue;
+                        }
+
                         // For each duplicate, find a group that doesn't contain the language or create
                         // a new group and put it in that one.
                         foreach(var snippet in langSet.Skip(1))

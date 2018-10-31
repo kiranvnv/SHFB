@@ -9,7 +9,7 @@ using System.IO;
 using System.Xml;
 using System.Xml.XPath;
 
-namespace Microsoft.Ddue.Tools
+namespace Microsoft.Ddue.Tools.BuildComponent
 {
 	// the storage system
 
@@ -65,7 +65,7 @@ namespace Microsoft.Ddue.Tools
 					if (keyNode == null) continue;
 					string key = keyNode.Value;
 
-					// log multiple occurences of a single id
+					// log multiple occurrences of a single id
 					if (idToFileMap.ContainsKey(key))
 					{
 						// WriteMessage(MessageLevel.Warn, String.Format("Entries for the key '{0}' occur in both '{1}' and '{2}'. The first entry will be used.", key, idToFileMap[key], file));

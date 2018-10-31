@@ -2,8 +2,8 @@
 // System  : Sandcastle Help File Builder Visual Studio Package
 // File    : ProjectFileSearcher.cs
 // Author  : Eric Woodruff  (Eric@EWoodruff.us)
-// Updated : 04/28/2015
-// Note    : Copyright 2014-2015, Eric Woodruff, All rights reserved
+// Updated : 09/02/2018
+// Note    : Copyright 2014-2018, Eric Woodruff, All rights reserved
 // Compiler: Microsoft Visual C#
 //
 // This file contains the class used to search for an open files related to MAML link-type elements such as for
@@ -116,6 +116,8 @@ namespace SandcastleBuilder.Package.GoToDefinition
         /// <returns>True if successful, false if not</returns>
         public bool OpenFileFor(IdType idType, string id)
         {
+            ThreadHelper.ThrowIfNotOnUIThread();
+
             try
             {
                 if(!this.DetermineCurrentSolutionAndProjects())
@@ -231,6 +233,8 @@ namespace SandcastleBuilder.Package.GoToDefinition
         public bool GetInfoFor(IdType idType, string id, out string title, out string filename,
           out string relativePath)
         {
+            ThreadHelper.ThrowIfNotOnUIThread();
+
             title = filename = relativePath = "(Not found)";
 
             try
@@ -308,8 +312,11 @@ namespace SandcastleBuilder.Package.GoToDefinition
         /// <returns>True if determined, false if not</returns>
         private bool DetermineCurrentSolutionAndProjects()
         {
+            ThreadHelper.ThrowIfNotOnUIThread();
+
             ITextDocument document;
 
+#pragma warning disable VSTHRD010
             // Determine the current project as it will be searched first
             if(textView != null && textView.TextDataModel.DocumentBuffer.Properties.TryGetProperty(
               typeof(ITextDocument), out document))
@@ -364,6 +371,7 @@ namespace SandcastleBuilder.Package.GoToDefinition
                         }
                     }
             }
+#pragma warning restore VSTHRD010
 
             // Add all other SHFB projects in the solution excluding the current project if it is one
             if(currentSolution != null)
@@ -386,6 +394,8 @@ namespace SandcastleBuilder.Package.GoToDefinition
         /// <returns>True if opened, false if not</returns>
         private bool OpenCodeSnippetFile(MSBuildProject currentProject, string id)
         {
+            ThreadHelper.ThrowIfNotOnUIThread();
+
             string projectPath = Path.GetDirectoryName(currentProject.FullPath), filePath;
 
             int pos = id.IndexOf(',');
@@ -405,8 +415,8 @@ namespace SandcastleBuilder.Package.GoToDefinition
 
                 if(File.Exists(filePath))
                 {
-                    // TODO: Can it find an open code snippet editor for the file if there is one and search its
-                    // content instead.
+                    // The file content may not be current if the file is open for editing but I can't be
+                    // bothered to add the code to go look for the open editor and get it from there yet.
                     var doc = XDocument.Load(filePath);
 
                     if(doc.Descendants("item").Any(t => t.Attribute("id").Value == id))
@@ -444,6 +454,8 @@ namespace SandcastleBuilder.Package.GoToDefinition
         /// <returns>True if opened, false if not</returns>
         private bool OpenTokenFile(MSBuildProject currentProject, string id)
         {
+            ThreadHelper.ThrowIfNotOnUIThread();
+
             string projectPath = Path.GetDirectoryName(currentProject.FullPath), filePath;
 
             foreach(var contentLayoutFile in currentProject.GetItems("Tokens"))
@@ -457,8 +469,8 @@ namespace SandcastleBuilder.Package.GoToDefinition
 
                 if(File.Exists(filePath))
                 {
-                    // TODO: Can it find an open token editor for the file if there is one and search its content
-                    // instead.
+                    // The file content may not be current if the file is open for editing but I can't be
+                    // bothered to add the code to go look for the open editor and get it from there yet.
                     var doc = XDocument.Load(filePath);
 
                     if(doc.Descendants("item").Any(t => t.Attribute("id").Value == id))

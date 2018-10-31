@@ -21,6 +21,8 @@
 // 1.9.7.0  01/11/2013  EFW  Added support for colorizing code blocks
 //===============================================================================================================
 
+// Ignore Spelling: Grande Semibold
+
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -437,9 +439,12 @@ namespace SandcastleBuilder.WPF.Maml
                     {
                         innerText = reCondenseWhitespace.Replace(text.Value, " ");
 
-                        // If this is the first child, trim the leading whitespace.  This prevents an extra
-                        // space showing up at the start of paragraph inner text when it starts on a new line.
-                        if(text.Parent.FirstNode == text)
+                        // If this is the first child or it's preceded by a line break, trim the leading
+                        // whitespace.  This prevents an extra space showing up at the start of paragraph
+                        // inner text when it starts on a new line.
+                        var prevNode = text.PreviousNode as XElement;
+
+                        if(text.Parent.FirstNode == text || (prevNode != null && prevNode.Name.LocalName == "lineBreak"))
                             innerText = innerText.TrimStart();
 
                         this.AddInlineToContainer(new Run(innerText));

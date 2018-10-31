@@ -1,3 +1,4 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
 <content xml:space="preserve">
 
   <!-- note text -->
@@ -87,8 +88,6 @@
 	<item id="indexEntry_delegate">{0} delegate</item>
 	<item id="indexEntry_enumeration">{0} enumeration</item>
   <item id="indexEntry_enumerationMember">{0} enumeration member</item>
-  <item id="indexEntry_aboutType">{0}, about {0}</item>
-  <item id="indexEntry_derivedTypes">{0}, derived types</item>
   <item id="indexEntry_members">{0}, all members</item>
   <item id="indexEntry_methods">{0}, methods</item>
   <!-- index entry for operator list topic that has [operators + no type conversions] -->
@@ -200,10 +199,6 @@
   <item id="text_staticNotThreadSafe">Los miembros est&#225;ticos de este tipo no son seguros para la ejecuci&#243;n de subprocesos. </item>
   <item id="text_instanceThreadSafe">Los miembros de instancia de este tipo son seguros para la ejecuci&#243;n de subprocesos. </item>
   <item id="text_instanceNotThreadSafe">Los miembros de instancia de este tipo no son seguros para la ejecuci&#243;n de subprocesos. </item>
-  
-  <item id="text_NotesForImplementers">Nota a los implementadores</item>
-  <item id="text_NotesForCallers">Nota a los consumidores</item>
-  <item id="text_NotesForInheritors">Nota a los herederos</item>
   
   <!-- boilerplate intro to member list tables -->
   <item id="genericExposedMembersTableText">El tipo gen&#233;rico {0} expone a los siguientes miembros.</item>
@@ -549,4 +544,8 @@
   <item id="SMCMissingTag"><p style="color: #dc143c; font-size: 8.5pt; font-weight: bold;">[Falta documentaci&#243;n &lt;{0}&gt; para "{1}"]</p></item>
   <item id="SMCMissingParamTag"><p style="color: #dc143c; font-size: 8.5pt; font-weight: bold;">[Falta documentaci&#243;n &lt;{0} name="{1}"/&gt; para "{2}"]</p></item>
   <item id="SMCMissingIncludeTarget"><p style="color: #dc143c; font-size: 8.5pt; font-weight: bold;">[Falta documentaci&#243;n objetivo &lt;include&gt; en '{0}'.  Archivo: '{1}' Ruta: '{2}']</p></item>
+
+	<!-- View Source link text -->
+	<item id="sourceCodeLinkText">View Source</item>
+	<item id="sourceCodeLinkTitle">View the source code</item>
 </content>

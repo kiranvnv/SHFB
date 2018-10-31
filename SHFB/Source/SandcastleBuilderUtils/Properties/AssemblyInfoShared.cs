@@ -2,14 +2,14 @@
 // System  : Sandcastle Help File Builder
 // File    : AssemblyInfoShared.cs
 // Author  : Eric Woodruff  (Eric@EWoodruff.us)
-// Updated : 05/02/2015
-// Note    : Copyright 2006-2015, Eric Woodruff, All rights reserved
+// Updated : 07/08/2018
+// Note    : Copyright 2006-2018, Eric Woodruff, All rights reserved
 // Compiler: Microsoft Visual C#
 //
 // Sandcastle Help File Builder common assembly attributes.
 //
 // This code is published under the Microsoft Public License (Ms-PL).  A copy of the license should be
-// distributed with the code.  It can also be found at the project website: https://GitHub.com/EWSoftware/SHFB.  This
+// distributed with the code and can be found at the project website: https://GitHub.com/EWSoftware/SHFB.  This
 // notice, the author's name, and all copyright notices must remain intact in all applications, documentation,
 // and source files.
 //
@@ -40,7 +40,7 @@ using System.Runtime.InteropServices;
 // NOTE: See AssemblyInfo.cs for project-specific assembly attributes
 
 // General assembly information
-[assembly: AssemblyProduct("Sandcastle Help File Builder")]
+[assembly: AssemblyProduct("Sandcastle Help File Builder and Tools")]
 [assembly: AssemblyCompany("Eric Woodruff")]
 [assembly: AssemblyCopyright(AssemblyInfo.Copyright)]
 [assembly: AssemblyCulture("")]
@@ -85,20 +85,20 @@ internal static partial class AssemblyInfo
     // This is used to set the assembly version in the strong name.  This should remain unchanged to maintain
     // binary compatibility with prior releases.  It should only be changed if a breaking change is made that
     // requires assemblies that reference older versions to be recompiled against the newer version.
-    public const string StrongNameVersion = "2014.11.22.0";
+    public const string StrongNameVersion = "2017.12.30.0";
 
     // Common assembly file version
     //
     // This is used to set the assembly file version.  This will change with each new release.  MSIs only
     // support a Major value between 0 and 255 so we drop the century from the year on this one.
-    public const string FileVersion = "15.5.2.0";
+    public const string FileVersion = "18.7.8.0";
 
     // Common product version
     //
     // This may contain additional text to indicate Alpha or Beta states.  The version number will always match
     // the file version above but includes the century on the year.
-    public const string ProductVersion = "2015.5.2.0";
+    public const string ProductVersion = "2018.7.8.0";
 
     // Assembly copyright information
-    public const string Copyright = "Copyright \xA9 2006-2015, Eric Woodruff, All Rights Reserved";
+    public const string Copyright = "Copyright \xA9 2006-2018, Eric Woodruff, All Rights Reserved";
 }

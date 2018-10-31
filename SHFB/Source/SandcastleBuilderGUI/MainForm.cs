@@ -2,8 +2,8 @@
 // System  : Sandcastle Help File Builder
 // File    : MainForm.cs
 // Author  : Eric Woodruff  (Eric@EWoodruff.us)
-// Updated : 05/24/2015
-// Note    : Copyright 2006-2015, Eric Woodruff, All rights reserved
+// Updated : 12/05/2017
+// Note    : Copyright 2006-2017, Eric Woodruff, All rights reserved
 // Compiler: Microsoft Visual C#
 //
 // This file contains the main form for the application.
@@ -35,6 +35,8 @@
 // 05/03/2015  EFW  Removed support for the MS Help 2 file format and the project converters
 //===============================================================================================================
 
+// Ignore Spelling: arning vpath
+
 using System;
 using System.Collections.Generic;
 using System.Collections.Specialized;
@@ -56,14 +58,15 @@ using Microsoft.Build.Exceptions;
 
 using Sandcastle.Core;
 
-using SandcastleBuilder.MicrosoftHelpViewer;
 using SandcastleBuilder.Utils;
 using SandcastleBuilder.Utils.BuildEngine;
 using SandcastleBuilder.Utils.Controls;
-using SandcastleBuilder.Utils.Design;
 
 using SandcastleBuilder.Gui.ContentEditors;
 using SandcastleBuilder.Gui.Properties;
+
+using SandcastleBuilder.WPF.PropertyPages;
+using SandcastleBuilder.WPF.UI;
 
 using WeifenLuo.WinFormsUI.Docking;
 
@@ -106,42 +109,27 @@ namespace SandcastleBuilder.Gui
         /// <remarks>This is used to let the various panes communicate between
         /// each other.  There are probably several different ways to do this
         /// that are better but this is quick and dirty and it works.</remarks>
-        public static MainForm Host
-        {
-            get { return mainForm; }
-        }
+        public static MainForm Host => mainForm;
 
         /// <summary>
         /// Get a reference to the Project Explorer pane
         /// </summary>
-        public ProjectExplorerWindow ProjectExplorer
-        {
-            get { return projectExplorer; }
-        }
+        public ProjectExplorerWindow ProjectExplorer => projectExplorer;
 
         /// <summary>
         /// Get a reference to the Project Properties pane
         /// </summary>
-        public ProjectPropertiesWindow ProjectProperties
-        {
-            get { return projectProperties; }
-        }
+        public ProjectPropertiesWindow ProjectProperties => projectProperties;
 
         /// <summary>
         /// Get a reference to the Project Explorer menu item
         /// </summary>
-        public ToolStripMenuItem ProjectExplorerMenu
-        {
-            get { return miProjectExplorer; }
-        }
+        public ToolStripMenuItem ProjectExplorerMenu => miProjectExplorer;
 
         /// <summary>
         /// Get a reference to the status strip label used for status bar text
         /// </summary>
-        public ToolStripStatusLabel StatusBarTextLabel
-        {
-            get { return tsslStatusText; }
-        }
+        public ToolStripStatusLabel StatusBarTextLabel => tsslStatusText;
 
         /// <summary>
         /// This returns a suffix to use as the project's window state
@@ -181,9 +169,7 @@ namespace SandcastleBuilder.Gui
 
             // We are only going to monitor for file changes.  We won't handle moves, deletes, or renames.
             changedFiles = new HashSet<string>();
-            fsw = new FileSystemWatcher();
-            fsw.NotifyFilter = NotifyFilters.LastWrite;
-            fsw.IncludeSubdirectories = true;
+            fsw = new FileSystemWatcher { NotifyFilter = NotifyFilters.LastWrite, IncludeSubdirectories = true };
             fsw.Changed += fsw_OnChanged;
 
             if(Settings.Default.ContentFileEditors == null)
@@ -241,10 +227,7 @@ namespace SandcastleBuilder.Gui
             if(persistString == typeof(EntityReferenceWindow).FullName)
             {
                 if(entityReferencesWindow == null)
-                {
-                    entityReferencesWindow = new EntityReferenceWindow();
-                    entityReferencesWindow.CurrentProject = project;
-                }
+                    entityReferencesWindow = new EntityReferenceWindow { CurrentProject = project };
 
                 return entityReferencesWindow;
             }
@@ -518,7 +501,10 @@ namespace SandcastleBuilder.Gui
                 }
 
                 if(project != null)
+                {
+                    ComponentCache.Clear();
                     project.Dispose();
+                }
 
                 project = projectExplorer.CurrentProject = projectProperties.CurrentProject = null;
                 this.UpdateFilenameInfo();
@@ -614,7 +600,7 @@ namespace SandcastleBuilder.Gui
             catch(Exception ex)
             {
                 // Ignore errors trying to kill the web server
-                System.Diagnostics.Debug.WriteLine(ex.ToString());
+                Debug.WriteLine(ex.ToString());
             }
             finally
             {
@@ -640,6 +626,9 @@ namespace SandcastleBuilder.Gui
             StringCollection mruList = Settings.Default.MruList;
             string state;
             int idx = 0;
+
+            // Set the owning window for WPF modal dialogs to this form
+            WpfHelpers.MainWindowHandle = this.Handle;
 
             projectExplorer = new ProjectExplorerWindow();
             projectProperties = new ProjectPropertiesWindow();
@@ -741,14 +730,14 @@ namespace SandcastleBuilder.Gui
                     }
                     catch(InvalidProjectFileException pex)
                     {
-                        System.Diagnostics.Debug.Write(pex);
+                        Debug.Write(pex);
 
                         MessageBox.Show("The project file format is invalid: " + pex.Message, Constants.AppName,
                             MessageBoxButtons.OK, MessageBoxIcon.Error);
                     }
                     catch(Exception ex)
                     {
-                        System.Diagnostics.Debug.Write(ex);
+                        Debug.Write(ex);
                         MessageBox.Show(ex.Message, Constants.AppName, MessageBoxButtons.OK, MessageBoxIcon.Error);
                     }
             }
@@ -797,9 +786,7 @@ namespace SandcastleBuilder.Gui
             if(!e.Cancel)
             {
                 // Save the current window size and position if possible
-                WINDOWPLACEMENT wp = new WINDOWPLACEMENT();
-                wp.length = Marshal.SizeOf(typeof(WINDOWPLACEMENT));
-
+                WINDOWPLACEMENT wp = new WINDOWPLACEMENT { length = Marshal.SizeOf(typeof(WINDOWPLACEMENT)) };
                 UnsafeNativeMethods.GetWindowPlacement(this.Handle, out wp);
                 Settings.Default.WindowPlacement = wp;
 
@@ -961,7 +948,7 @@ namespace SandcastleBuilder.Gui
                     }
                     catch(Exception ex)
                     {
-                        System.Diagnostics.Debug.Write(ex);
+                        Debug.Write(ex);
                         MessageBox.Show(ex.Message, Constants.AppName, MessageBoxButtons.OK, MessageBoxIcon.Error);
                     }
                     finally
@@ -997,14 +984,14 @@ namespace SandcastleBuilder.Gui
                         }
                         catch(InvalidProjectFileException pex)
                         {
-                            System.Diagnostics.Debug.Write(pex);
+                            Debug.Write(pex);
 
                             MessageBox.Show("The project file format is invalid: " + pex.Message,
                                 Constants.AppName, MessageBoxButtons.OK, MessageBoxIcon.Error);
                         }
                         catch(Exception ex)
                         {
-                            System.Diagnostics.Debug.Write(ex);
+                            Debug.Write(ex);
                             MessageBox.Show(ex.Message, Constants.AppName,
                                 MessageBoxButtons.OK, MessageBoxIcon.Error);
                         }
@@ -1042,15 +1029,13 @@ namespace SandcastleBuilder.Gui
 
             if(mruList.Count == 0)
             {
-                miMruProject = new ToolStripMenuItem("(Empty)");
-                miMruProject.Enabled = false;
+                miMruProject = new ToolStripMenuItem("(Empty)") { Enabled = false };
                 miRecentProjects.DropDownItems.Add(miMruProject);
             }
             else
                 foreach(string mru in mruList)
                 {
-                    miMruProject = new ToolStripMenuItem();
-                    miMruProject.Text = String.Format(CultureInfo.CurrentCulture, "&{0} {1}", idx++, mru);
+                    miMruProject = new ToolStripMenuItem { Text = $"&{idx++} {mru}" };
                     miMruProject.Click += new EventHandler(miProject_Click);
                     miRecentProjects.DropDownItems.Add(miMruProject);
                 }
@@ -1077,14 +1062,14 @@ namespace SandcastleBuilder.Gui
                 }
                 catch(InvalidProjectFileException pex)
                 {
-                    System.Diagnostics.Debug.Write(pex);
+                    Debug.Write(pex);
 
                     MessageBox.Show("The project file format is invalid: " + pex.Message, Constants.AppName,
                         MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
                 catch(Exception ex)
                 {
-                    System.Diagnostics.Debug.Write(ex);
+                    Debug.Write(ex);
                     MessageBox.Show(ex.Message, Constants.AppName,
                         MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
@@ -1294,7 +1279,7 @@ namespace SandcastleBuilder.Gui
                 }
                 catch(Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine(ex.ToString());
+                    Debug.WriteLine(ex.ToString());
                     MessageBox.Show("Unable to clean output folder.  Reason: " + ex.Message, Constants.AppName,
                         MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
@@ -1423,11 +1408,11 @@ namespace SandcastleBuilder.Gui
 
             try
             {
-                System.Diagnostics.Process.Start(outputPath);
+                Process.Start(outputPath);
             }
             catch(Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine(ex.ToString());
+                Debug.WriteLine(ex.ToString());
                 MessageBox.Show(String.Format(CultureInfo.CurrentCulture, "Unable to open help file '{0}'\r\nReason: {1}",
                     outputPath, ex.Message), Constants.AppName, MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
             }
@@ -1441,10 +1426,8 @@ namespace SandcastleBuilder.Gui
         /// <param name="e">The event arguments</param>
         private void miViewMSHelpViewer_Click(object sender, EventArgs e)
         {
-            using(LaunchMSHelpViewerDlg dlg = new LaunchMSHelpViewerDlg(project, Settings.Default.MSHelpViewerPath))
-            {
-                dlg.ShowDialog();
-            }
+            var dlg = new LaunchMSHelpViewerDlg(project, Settings.Default.MSHelpViewerPath);
+            dlg.ShowModalDialog();
         }
 
         /// <summary>
@@ -1456,12 +1439,13 @@ namespace SandcastleBuilder.Gui
         {
             ProcessStartInfo psi;
             FilePath webServerPath = new FilePath(null);
-            string path, defaultPage = "Index.aspx";
+            string outputPath, path, vPath = null, defaultPage = "Index.aspx";
 
             // Make sure we start out in the project's output folder in case the output folder is relative to it
             Directory.SetCurrentDirectory(Path.GetDirectoryName(Path.GetFullPath(project.Filename)));
 
-            string outputPath = project.OutputPath;
+            outputPath = project.OutputPath;
+            vPath = String.Format(" /vpath:\"/SHFBOutput_{0}\"", this.Handle);
 
             if(String.IsNullOrEmpty(outputPath))
                 outputPath = Directory.GetCurrentDirectory();
@@ -1511,8 +1495,17 @@ namespace SandcastleBuilder.Gui
 
                     if(!File.Exists(webServerPath))
                     {
-                        MessageBox.Show("Unable to locate ASP.NET Development Web Server.  View the HTML " +
-                            "website instead.", Constants.AppName, MessageBoxButtons.OK,
+                        // Try for IIS Express
+                        webServerPath.Path = Path.Combine(Environment.GetFolderPath(Environment.Is64BitProcess ?
+                            Environment.SpecialFolder.ProgramFilesX86 : Environment.SpecialFolder.ProgramFiles),
+                            @"IIS Express\IISExpress.exe");
+                        vPath = String.Empty;
+                    }
+
+                    if(!File.Exists(webServerPath))
+                    {
+                        MessageBox.Show("Unable to locate ASP.NET Development Web Server or IIS Express.  " +
+                            "View the HTML website instead.", Constants.AppName, MessageBoxButtons.OK,
                             MessageBoxIcon.Information);
                         return;
                     }
@@ -1521,27 +1514,39 @@ namespace SandcastleBuilder.Gui
                     psi = webServer.StartInfo;
 
                     psi.FileName = webServerPath;
-                    psi.Arguments = String.Format(CultureInfo.InvariantCulture,
-                        "/port:{0} /path:\"{1}\" /vpath:\"/SHFBOutput_{2}\"",
-                        Settings.Default.ASPNETDevServerPort, outputPath, this.Handle);
+                    psi.Arguments = String.Format(CultureInfo.InvariantCulture, "/port:{0} /path:\"{1}\"{2}",
+                        Settings.Default.ASPNETDevServerPort, outputPath, vPath);
                     psi.WorkingDirectory = outputPath;
                     psi.UseShellExecute = false;
 
                     webServer.Start();
-                    webServer.WaitForInputIdle(30000);
+
+                    if(!String.IsNullOrWhiteSpace(vPath))
+                        webServer.WaitForInputIdle(30000);
+                    else
+                        Thread.Sleep(500);
                 }
+                else
+                    if(webServer.ProcessName.StartsWith("IISExpress", StringComparison.OrdinalIgnoreCase))
+                        vPath = String.Empty;
 
                 // This form's handle is used to keep the URL unique in case multiple copies of SHFB are running
-                // so that each can view website output.
-                outputPath = String.Format(CultureInfo.InvariantCulture,
-                    "http://localhost:{0}/SHFBOutput_{1}/{2}", Settings.Default.ASPNETDevServerPort,
-                    this.Handle, defaultPage);
+                // so that each can view website output (WebDevServer only).
+                if(!String.IsNullOrWhiteSpace(vPath))
+                {
+                    outputPath = String.Format(CultureInfo.InvariantCulture,
+                        "http://localhost:{0}/SHFBOutput_{1}/{2}", Settings.Default.ASPNETDevServerPort,
+                        this.Handle, defaultPage);
+                }
+                else
+                    outputPath = String.Format(CultureInfo.InvariantCulture, "http://localhost:{0}/{1}",
+                        Settings.Default.ASPNETDevServerPort, defaultPage);
 
-                System.Diagnostics.Process.Start(outputPath);
+                Process.Start(outputPath);
             }
             catch(Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine(ex.ToString());
+                Debug.WriteLine(ex.ToString());
                 MessageBox.Show(String.Format(CultureInfo.CurrentCulture,
                     "Unable to open ASP.NET website '{0}'\r\nReason: {1}", outputPath, ex.Message),
                     Constants.AppName, MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
@@ -1761,8 +1766,7 @@ namespace SandcastleBuilder.Gui
         {
             if(entityReferencesWindow == null)
             {
-                entityReferencesWindow = new EntityReferenceWindow();
-                entityReferencesWindow.CurrentProject = project;
+                entityReferencesWindow = new EntityReferenceWindow { CurrentProject = project };
                 entityReferencesWindow.Show(dockPanel);
             }
             else
@@ -1812,7 +1816,7 @@ namespace SandcastleBuilder.Gui
                     previewWindow.Show(dockPanel);
                 }
 
-                previewWindow.PreviewTopic(project, (fileItem == null) ? null : fileItem.FullPath);
+                previewWindow.PreviewTopic(project, fileItem?.FullPath);
                 previewWindow.Activate();
 
                 // When the state is restored and it's a document pane, it doesn't always become the active pane
@@ -1869,6 +1873,10 @@ namespace SandcastleBuilder.Gui
                     else
                         excludedWorkingFolder = project.WorkingPath;
                 }
+
+                // While debugging, this occasionally gets a null folder reference so we'll ignore them
+                if(excludedOutputFolder == null || excludedWorkingFolder == null)
+                    excludedOutputFolder = excludedWorkingFolder = "??";
 
                 if(excludedOutputFolder.EndsWith("\\", StringComparison.Ordinal))
                     excludedOutputFolder = excludedOutputFolder.Substring(0, excludedOutputFolder.Length - 1);
@@ -1943,7 +1951,7 @@ namespace SandcastleBuilder.Gui
                 }
                 catch(Exception ex)
                 {
-                    System.Diagnostics.Debug.Write(ex);
+                    Debug.Write(ex);
                     MessageBox.Show(ex.Message, Constants.AppName, MessageBoxButtons.OK,
                         MessageBoxIcon.Error);
                 }

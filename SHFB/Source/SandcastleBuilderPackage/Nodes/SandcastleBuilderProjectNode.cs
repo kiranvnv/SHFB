@@ -2,26 +2,28 @@
 // System  : Sandcastle Help File Builder Visual Studio Package
 // File    : SandcastleBuilderProjectNode.cs
 // Author  : Eric Woodruff  (Eric@EWoodruff.us)
-// Updated : 11/20/2014
-// Note    : Copyright 2011-2014, Eric Woodruff, All rights reserved
+// Updated : 09/02/2018
+// Note    : Copyright 2011-2018, Eric Woodruff, All rights reserved
 // Compiler: Microsoft Visual C#
 //
 // This file contains the class that represents a project node in a Sandcastle Help File Builder Visual Studio
 // project.
 //
 // This code is published under the Microsoft Public License (Ms-PL).  A copy of the license should be
-// distributed with the code.  It can also be found at the project website: https://GitHub.com/EWSoftware/SHFB.  This
+// distributed with the code and can be found at the project website: https://GitHub.com/EWSoftware/SHFB.  This
 // notice, the author's name, and all copyright notices must remain intact in all applications, documentation,
 // and source files.
 //
-// Version     Date     Who  Comments
+//    Date     Who  Comments
 // ==============================================================================================================
-// 1.9.3.0  03/22/2011  EFW  Created the code
-// 1.9.3.3  11/19/2011  EFW  Added support for drag and drop from Explorer
-// 1.9.6.0  10/22/2012  EFW  Updated to support .winmd documentation sources
-// -------  01/10/2014  EFW  Added code to set SHFBROOT if defined locally in the project which allows it to
-//                           override the environment variable setting.
+// 03/22/2011  EFW  Created the code
+// 11/19/2011  EFW  Added support for drag and drop from Explorer
+// 10/22/2012  EFW  Updated to support .winmd documentation sources
+// 01/10/2014  EFW  Added code to set SHFBROOT if defined locally in the project which allows it to override the
+//                  environment variable setting.
 //===============================================================================================================
+
+// Ignore Spelling: vpath Projref
 
 using System;
 using System.Collections.Generic;
@@ -181,7 +183,7 @@ namespace SandcastleBuilder.Package.Nodes
                 typeof(DocumentationSourceNodeProperties).GUID);
 
             // The following are not specific to Sandcastle Builder and as such we need a separate GUID
-            // (we simply used guidgen.exe to create new guids).
+            // (we simply used guidgen.exe to create new GUIDs).
             base.AddCATIDMapping(typeof(ProjectNodeProperties), new Guid("CD4A4A5D-345C-4faf-9BDC-AB3F04DEE02F"));
             base.AddCATIDMapping(typeof(FolderNodeProperties), new Guid("9D0F0FAA-F7B1-43ee-A8CF-046B80F2384B"));
             base.AddCATIDMapping(typeof(ReferenceNodeProperties), new Guid("0B6EF0B6-8699-470d-A8A1-16F745810073"));
@@ -240,6 +242,8 @@ namespace SandcastleBuilder.Package.Nodes
         {
             try
             {
+                ThreadHelper.ThrowIfNotOnUIThread();
+
                 string gui = Path.Combine(Environment.GetEnvironmentVariable("SHFBROOT") ?? String.Empty,
                     "SandcastleBuilderGUI.exe");
 
@@ -249,7 +253,7 @@ namespace SandcastleBuilder.Package.Nodes
                     if(base.IsProjectFileDirty)
                         ErrorHandler.ThrowOnFailure(base.Save(base.FileName, 1, 0));
 
-                    System.Diagnostics.Process.Start(gui, "\"" + this.BuildProject.FullPath + "\"");
+                    Process.Start(gui, "\"" + this.BuildProject.FullPath + "\"");
                 }
                 else
                     Utility.ShowMessageBox(OLEMSGICON.OLEMSGICON_INFO,
@@ -257,7 +261,7 @@ namespace SandcastleBuilder.Package.Nodes
             }
             catch(Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine(ex.ToString());
+                Debug.WriteLine(ex.ToString());
                 Utility.ShowMessageBox(OLEMSGICON.OLEMSGICON_CRITICAL,
                     "Unable to open project in standalone GUI.  Reason: {0}", ex.Message);
             }
@@ -270,8 +274,8 @@ namespace SandcastleBuilder.Package.Nodes
         public string StartWebServerInstance()
         {
             ProcessStartInfo psi;
-            SandcastleBuilder.Utils.FilePath webServerPath = new SandcastleBuilder.Utils.FilePath(null);
-            string path, outputPath, defaultPage = "Index.aspx";
+            Utils.FilePath webServerPath = new Utils.FilePath(null);
+            string path, vPath = null, outputPath, defaultPage = "Index.aspx";
             int serverPort = 12345, uniqueId;
 
             if(this.SandcastleProject == null)
@@ -284,6 +288,7 @@ namespace SandcastleBuilder.Package.Nodes
 
             // Use the project filename's hash code as a unique ID for the website
             uniqueId = this.SandcastleProject.Filename.GetHashCode();
+            vPath = String.Format(" /vpath:\"/SHFBOutput_{0}\"", uniqueId);
 
             // Make sure we start out in the project's output folder
             // in case the output folder is relative to it.
@@ -305,8 +310,10 @@ namespace SandcastleBuilder.Package.Nodes
 
             if(!File.Exists(outputPath))
             {
+#pragma warning disable VSTHRD010
                 Utility.ShowMessageBox(OLEMSGICON.OLEMSGICON_INFO, "A copy of the website does not appear to exist yet.  " +
                     "It may need to be built.");
+#pragma warning restore VSTHRD010
                 return null;
             }
 
@@ -341,8 +348,17 @@ namespace SandcastleBuilder.Package.Nodes
 
                     if(!File.Exists(webServerPath))
                     {
+                        // Try for IIS Express
+                        webServerPath.Path = Path.Combine(Environment.GetFolderPath(Environment.Is64BitProcess ?
+                            Environment.SpecialFolder.ProgramFilesX86 : Environment.SpecialFolder.ProgramFiles),
+                            @"IIS Express\IISExpress.exe");
+                        vPath = String.Empty;
+                    }
+
+                    if(!File.Exists(webServerPath))
+                    {
                         Utility.ShowMessageBox(OLEMSGICON.OLEMSGICON_INFO, "Unable to locate ASP.NET " +
-                            "Development Web Server.  View the HTML website instead.");
+                            "Development Web Server or IIS Express.  View the HTML website instead.");
                         return null;
                     }
 
@@ -350,25 +366,38 @@ namespace SandcastleBuilder.Package.Nodes
                     psi = webServerInstance.StartInfo;
 
                     psi.FileName = webServerPath;
-                    psi.Arguments = String.Format(CultureInfo.InvariantCulture,
-                        "/port:{0} /path:\"{1}\" /vpath:\"/SHFBOutput_{2}\"", serverPort, outputPath, uniqueId);
+                    psi.Arguments = String.Format(CultureInfo.InvariantCulture, "/port:{0} /path:\"{1}\"{2}",
+                        serverPort, outputPath, vPath);
                     psi.WorkingDirectory = outputPath;
                     psi.UseShellExecute = false;
 
                     webServerInstance.Start();
-                    webServerInstance.WaitForInputIdle(30000);
+
+                    if(!String.IsNullOrWhiteSpace(vPath))
+                        webServerInstance.WaitForInputIdle(30000);
+                    else
+                        System.Threading.Thread.Sleep(500);
                 }
+                else
+                    if(webServerInstance.ProcessName.StartsWith("IISExpress", StringComparison.OrdinalIgnoreCase))
+                        vPath = String.Empty;
 
                 // The project filename hash code is used to keep the URL unique in case multiple copies of SHFB
-                // are running so that each can view website output.
-                outputPath = String.Format(CultureInfo.InvariantCulture,
-                    "http://localhost:{0}/SHFBOutput_{1}/{2}", serverPort, uniqueId, defaultPage);
+                // are running so that each can view website output (WebDevServer only).
+                if(!String.IsNullOrWhiteSpace(vPath))
+                {
+                    outputPath = String.Format(CultureInfo.InvariantCulture,
+                        "http://localhost:{0}/SHFBOutput_{1}/{2}", serverPort, uniqueId, defaultPage);
+                }
+                else
+                    outputPath = String.Format(CultureInfo.InvariantCulture, "http://localhost:{0}/{1}",
+                        serverPort, defaultPage);
 
                 return outputPath;
             }
             catch(Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine(ex.ToString());
+                Debug.WriteLine(ex.ToString());
                 Utility.ShowMessageBox(OLEMSGICON.OLEMSGICON_CRITICAL,
                     "Unable to open ASP.NET website '{0}'\r\nReason: {1}", outputPath, ex.Message);
             }
@@ -382,6 +411,8 @@ namespace SandcastleBuilder.Package.Nodes
         /// <param name="showWindow">True to show the window, false to just update the log file to show</param>
         internal void OpenBuildLogToolWindow(bool showWindow)
         {
+            ThreadHelper.ThrowIfNotOnUIThread();
+
             var window = this.Package.FindToolWindow(typeof(ToolWindows.BuildLogToolWindow), 0, true);
 
             if(window == null || window.Frame == null)
@@ -406,6 +437,8 @@ namespace SandcastleBuilder.Package.Nodes
         /// is null</remarks>
         private DropDataType HandleSelectionDataObject(IOleDataObject dataObject, HierarchyNode targetNode)
         {
+            ThreadHelper.ThrowIfNotOnUIThread();
+
             DropDataType dropDataType = DropDataType.None;
             bool isWindowsFormat = false;
 
@@ -466,7 +499,7 @@ namespace SandcastleBuilder.Package.Nodes
                         if(!f.EndsWith(".sln", StringComparison.OrdinalIgnoreCase))
                             docSourcesNode.AddDocumentationSource(f);
                         else
-                            foreach(string project in SandcastleBuilder.Utils.MSBuild.SelectProjectsDlg.SelectSolutionOrProjects(f))
+                            foreach(string project in SandcastleBuilder.WPF.UI.SelectProjectsDlg.SelectSolutionOrProjects(f))
                                 docSourcesNode.AddDocumentationSource(project);
                     }
                 }
@@ -562,7 +595,7 @@ namespace SandcastleBuilder.Package.Nodes
             catch(Exception ex)
             {
                 // Ignore errors trying to kill the web server
-                System.Diagnostics.Debug.WriteLine(ex.ToString());
+                Debug.WriteLine(ex.ToString());
             }
             finally
             {
@@ -575,6 +608,8 @@ namespace SandcastleBuilder.Package.Nodes
         /// <inheritdoc />
         public override int UpgradeProject(uint grfUpgradeFlags)
         {
+            ThreadHelper.ThrowIfNotOnUIThread();
+
             Version schemaVersion;
             string propertyValue = base.GetProjectProperty("SHFBSchemaVersion");
 
@@ -760,22 +795,26 @@ namespace SandcastleBuilder.Package.Nodes
 
                     // Unlike the standalone GUI we can't figure out where SHFBROOT should point so we'll make
                     // the user take care of it.
+#pragma warning disable VSTHRD010
                     if(String.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("SHFBROOT")))
                         Utility.ShowMessageBox(OLEMSGICON.OLEMSGICON_INFO, "The SHFBROOT system environment " +
                             "variable was not found.  This variable is usually created during installation and " +
                             "may require a reboot.  It may also be defined locally within the project.  Since " +
                             "it has not been set, the project properties may not be editable nor may the project " +
                             "be built properly.  Please ensure the variable is defined and reload the project.");
+#pragma warning restore VSTHRD010
                 }
             }
             catch
             {
                 // Ignore errors.  If we can't set SHFBROOT, let the project load anyway.
+#pragma warning disable VSTHRD010
                 Utility.ShowMessageBox(OLEMSGICON.OLEMSGICON_INFO, "The SHFBROOT system environment variable " +
                     "was not found and could not be set.  This variable is usually created during installation " +
                     "and may require a reboot.  It may also be defined locally within the project.  Since it " +
                     "has not been set, the project properties may not be editable nor may the project be built " +
                     "properly.  Please ensure the variable is defined and reload the project.");
+#pragma warning restore VSTHRD010
             }
 
             ProjectPropertiesContainerNode projProps = this.FindChild(
@@ -841,6 +880,7 @@ namespace SandcastleBuilder.Package.Nodes
         protected override int ExecCommandOnNode(Guid cmdGroup, uint cmd, uint nCmdexecopt, IntPtr pvaIn,
           IntPtr pvaOut)
         {
+#pragma warning disable VSTHRD010
             if(cmdGroup == GuidList.guidSandcastleBuilderPackageCmdSet)
                 switch(cmd)
                 {
@@ -855,6 +895,7 @@ namespace SandcastleBuilder.Package.Nodes
                     default:
                         break;
                 }
+#pragma warning restore VSTHRD010
 
             return base.ExecCommandOnNode(cmdGroup, cmd, nCmdexecopt, pvaIn, pvaOut);
         }
@@ -878,9 +919,9 @@ namespace SandcastleBuilder.Package.Nodes
         /// <inheritdoc />
         public override MSBuildResult Build(uint vsopts, string config, IVsOutputWindowPane output, string target)
         {
-            // TODO: Opening the Tools menu during a build fails because it executes a build for the AllProjectOutputs group.
-            // Don't know why yet.  Is this the best workaround?
-            if(base.BuildInProgress)
+            // Opening the Tools menu during a build may fail because it sometimes executes a build for the
+            // AllProjectOutputs group.  Don't know why, but this works around it.
+            if(this.BuildInProgress)
                 return MSBuildResult.Successful;
 
             return base.Build(vsopts, config, output, target);
@@ -968,13 +1009,69 @@ namespace SandcastleBuilder.Package.Nodes
 
             targetNode = targetNode.GetDragTargetHandlerNode();
 
+#pragma warning disable VSTHRD010
             dropDataType = this.HandleSelectionDataObject(pDataObject, targetNode);
+#pragma warning restore VSTHRD010
 
             // Since we can get a mix of files that may not necessarily be moved into the project (i.e.
             // documentation sources and references), we'll always act as if they were copied.
             pdwEffect = (uint)DropEffect.Copy;
 
             return (dropDataType != DropDataType.Shell) ? VSConstants.E_FAIL : VSConstants.S_OK;
+        }
+
+        /// <summary>
+        /// This is overridden to ignore subfolders beneath the help output folder and the working folder when
+        /// performing the Show All Files action.
+        /// </summary>
+        protected override IEnumerable<string> FoldersToIgnore()
+        {
+            List<string> folders = new List<string>();
+            string value;
+
+            try
+            {
+                var prop = this.ProjectMgr.BuildProject.GetProperty("WorkingFolder");
+            
+                if(prop != null)
+                {
+                    value = prop.EvaluatedValue;
+
+                    if(value.Length != 0 && value[value.Length - 1] == '\\')
+                        value = value.Substring(0, value.Length - 1);
+
+                    if(!String.IsNullOrWhiteSpace(value))
+                        if(!Path.IsPathRooted(value))
+                            folders.Add(Path.Combine(Path.GetFileName(this.ProjectMgr.BuildProject.FullPath), value));
+                        else
+                            folders.Add(value);
+                }
+
+                prop = this.ProjectMgr.BuildProject.GetProperty("OutputPath");
+
+                if(prop != null)
+                {
+                    value = prop.EvaluatedValue;
+
+                    if(!String.IsNullOrWhiteSpace(value))
+                    {
+                        if(!Path.IsPathRooted(value))
+                            value = Path.Combine(Path.GetDirectoryName(this.ProjectMgr.BuildProject.FullPath), value);
+
+                        // Allow for content in the output folder but ignore subfolders (i.e. from web output)
+                        if(Directory.Exists(value))
+                            foreach(string subfolder in Directory.EnumerateDirectories(value))
+                                folders.Add(subfolder);
+                    }
+                }
+            }
+            catch(Exception ex)
+            {
+                // Ignore errors and just return what we could get
+                Debug.WriteLine(ex);
+            }
+
+            return folders;
         }
         #endregion
     }

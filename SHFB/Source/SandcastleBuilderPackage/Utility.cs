@@ -2,8 +2,8 @@
 // System  : Sandcastle Help File Builder Visual Studio Package
 // File    : Utility.cs
 // Author  : Eric Woodruff  (Eric@EWoodruff.us)
-// Updated : 06/06/2015
-// Note    : Copyright 2011-2015, Eric Woodruff, All rights reserved
+// Updated : 09/02/2018
+// Note    : Copyright 2011-2018, Eric Woodruff, All rights reserved
 // Compiler: Microsoft Visual C#
 //
 // This file contains a utility class with extension and utility methods.
@@ -18,16 +18,19 @@
 // 04/02/2011  EFW  Created the code
 //===============================================================================================================
 
+// Ignore Spelling: Za
+
 using System;
 using System.Collections.Generic;
-using System.Drawing;
 using System.Globalization;
 using System.IO;
 using System.Text.RegularExpressions;
 
 using Microsoft.VisualStudio;
+using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Project;
 using Microsoft.VisualStudio.Shell.Interop;
+using MsVsShellPackage = Microsoft.VisualStudio.Shell.Package;
 
 using SandcastleBuilder.Package.Properties;
 using SandcastleBuildItemMetadata = SandcastleBuilder.Utils.BuildItemMetadata;
@@ -164,9 +167,7 @@ namespace SandcastleBuilder.Package
             where TInterface : class
             where TService : class
         {
-            IServiceProvider provider = SandcastleBuilderPackage.Instance;
-
-            TInterface service = (provider == null) ? null : provider.GetService(typeof(TService)) as TInterface;
+            TInterface service = MsVsShellPackage.GetGlobalService(typeof(TService)) as TInterface;
 
             if(service == null && throwOnError)
                 throw new InvalidOperationException("Unable to obtain service of type " + typeof(TService).Name);
@@ -182,18 +183,21 @@ namespace SandcastleBuilder.Package
         /// <param name="parameters">An optional list of parameters for the message format string</param>
         public static void ShowMessageBox(OLEMSGICON icon, string message, params object[] parameters)
         {
+            ThreadHelper.ThrowIfNotOnUIThread();
+
             Guid clsid = Guid.Empty;
             int result;
 
             if(message == null)
                 throw new ArgumentNullException("message");
 
-            IVsUIShell uiShell = GetServiceFromPackage<IVsUIShell, SVsUIShell>(true);
+            IVsUIShell uiShell = MsVsShellPackage.GetGlobalService(typeof(SVsUIShell)) as IVsUIShell;
 
-            ErrorHandler.ThrowOnFailure(uiShell.ShowMessageBox(0, ref clsid,
-                Resources.PackageTitle, String.Format(CultureInfo.CurrentCulture, message, parameters),
-                String.Empty, 0, OLEMSGBUTTON.OLEMSGBUTTON_OK, OLEMSGDEFBUTTON.OLEMSGDEFBUTTON_FIRST, icon, 0,
-                out result));
+            if(uiShell != null)
+                ErrorHandler.ThrowOnFailure(uiShell.ShowMessageBox(0, ref clsid,
+                    Resources.PackageTitle, String.Format(CultureInfo.CurrentCulture, message, parameters),
+                    String.Empty, 0, OLEMSGBUTTON.OLEMSGBUTTON_OK, OLEMSGDEFBUTTON.OLEMSGDEFBUTTON_FIRST, icon, 0,
+                    out result));
         }
 
         /// <summary>
@@ -202,9 +206,10 @@ namespace SandcastleBuilder.Package
         /// <param name="url">The URL to display</param>
         public static void OpenUrl(string url)
         {
+            ThreadHelper.ThrowIfNotOnUIThread();
+
             IVsWindowFrame frame;
-            IVsWebBrowsingService webBrowsingService = GetServiceFromPackage<IVsWebBrowsingService,
-                SVsWebBrowsingService>(true);
+            var webBrowsingService = MsVsShellPackage.GetGlobalService(typeof(SVsWebBrowsingService)) as IVsWebBrowsingService;
             bool useExternalBrowser = false;
 
             if(String.IsNullOrEmpty(url))
@@ -224,25 +229,6 @@ namespace SandcastleBuilder.Package
             }
             else
                 System.Diagnostics.Process.Start(url);
-        }
-
-        /// <summary>
-        /// This is used to get the current dialog font for use in property pages, etc.
-        /// </summary>
-        /// <returns>The current dialog font or a Segoe UI 9pt font if it is not available</returns>
-        public static Font GetDialogFont()
-        {
-            IUIHostLocale host = GetServiceFromPackage<IUIHostLocale, IUIHostLocale>(false);
-
-            if(host != null)
-            {
-                UIDLGLOGFONT[] pLOGFONT = new UIDLGLOGFONT[1];
-
-                if(host.GetDialogFont(pLOGFONT) == 0)
-                    return Font.FromLogFont(pLOGFONT[0]);
-            }
-
-            return new Font("Segoe UI", 9.0f);
         }
         #endregion
     }

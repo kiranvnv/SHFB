@@ -1,28 +1,30 @@
-//=============================================================================
+//===============================================================================================================
 // System  : Sandcastle MRefBuilder Tool
 // File    : AssemblyResolver.cs
-// Note    : Copyright 2006-2013 Microsoft Corporation
+// Note    : Copyright 2006-2016 Microsoft Corporation
 //
-// This file contains a modified version of the original AssemblyResolver that
-// supports assembly binding redirect elements in its configuration that let
-// you redirect an unknown assembly's strong name to another when resolving
-// an unknown reference.
+// This file contains a modified version of the original AssemblyResolver that supports assembly binding
+// redirect elements in its configuration that let you redirect an unknown assembly's strong name to another
+// when resolving an unknown reference.
 //
-// This code is published under the Microsoft Public License (Ms-PL).  A copy
-// of the license should be distributed with the code.  It can also be found
-// at the project website: https://GitHub.com/EWSoftware/SHFB.   This notice and
-// all copyright notices must remain intact in all applications, documentation,
-// and source files.
+// This code is published under the Microsoft Public License (Ms-PL).  A copy of the license should be
+// distributed with the code and can be found at the project website: https://GitHub.com/EWSoftware/SHFB.  This
+// notice and all copyright notices must remain intact in all applications, documentation, and source files.
 //
 // Change History
 // 03/02/2012 - EFW - Merged my changes into the code
 // 08/10/2012 - EFW - Added support for ignoreIfUnresolved config element
-//=============================================================================
+// 08/19/2016 - EFW - Added code to resolve a missing mscorlib v255 to System.Runtime
+// 04/11/2017 - EFW - Added code to resolve a missing System.Runtime to mscorlib
+// 11/06/2017 - EFW - Added code to auto-redirect to a like-named assembly in the cache if one is found.  This
+// helps correct missing assembly issues in .NETCore/.NETStandard projects which can vary by version number.
+//===============================================================================================================
 
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
+using System.Linq;
 using System.Xml.XPath;
 
 using System.Compiler;
@@ -314,6 +316,63 @@ namespace Microsoft.Ddue.Tools.Reflection
                     return assembly;
                 }
 
+            // For mscorlib v255.255.255.255, redirect to System.Runtime.  This is typically one like a .NETCore
+            // framework which redirects all of the system types there.  For a missing System.Runtime and System
+            // v0.0.0.0, redirect to mscorlib.  This is most likely a framework such as .NETStandard.  For those,
+            // we use the best matching .NET Framework.
+            if((reference.Name == "mscorlib" && reference.Version.Major == 255) ||
+              (reference.Name == "System" && reference.Version.Major == 0) || reference.Name == "System.Runtime")
+            {
+                // The system assembly should be set.  If so, it'll point to the one we need.
+                if(SystemTypes.SystemAssembly != null)
+                {
+                    assembly = SystemTypes.SystemAssembly;
+                    cache.Add(name, assembly);
+                    return assembly;
+                }
+
+                // If not, look for it in the cache
+                string key = cache.Keys.FirstOrDefault(k => k.StartsWith("System.Runtime,", StringComparison.Ordinal));
+
+                if(key != null)
+                {
+                    assembly = cache[key];
+                    cache.Add(name, assembly);
+                    return assembly;
+                }
+            }
+
+            if(reference.Name != "mscorlib")
+            {
+                // Try for a framework assembly in the target platform
+                var assemblyRef = (AssemblyReference)TargetPlatform.AssemblyReferenceFor[Identifier.For(reference.Name).UniqueIdKey];
+
+                if(assemblyRef != null && System.IO.File.Exists(assemblyRef.Location))
+                {
+                    assembly = AssemblyNode.GetAssembly(assemblyRef.Location, null, false, false, false, false);
+
+                    ConsoleApplication.WriteMessage(LogLevel.Info, "Using framework redirect '{0}' in place of '{1}'",
+                        assembly.StrongName, name);
+
+                    cache.Add(name, assembly);
+                    return assembly;
+                }
+
+                // If not, look for it in the cache by name alone
+                string key = cache.Keys.FirstOrDefault(k => k.StartsWith(reference.Name, StringComparison.Ordinal));
+
+                if(key != null)
+                {
+                    assembly = cache[key];
+                    cache.Add(name, assembly);
+
+                    ConsoleApplication.WriteMessage(LogLevel.Info, "Using automatic redirect '{0}' in place of '{1}'",
+                        assembly.StrongName, name);
+
+                    return assembly;
+                }
+            }
+
             // Couldn't find it; return null
             return null;
         }
@@ -326,8 +385,11 @@ namespace Microsoft.Ddue.Tools.Reflection
         /// <returns>Always returns null</returns>
         private AssemblyNode UnresolvedReference(AssemblyReference reference, Module module)
         {
-            // Don't raise the event if ignored
-            if(!ignoreIfUnresolved.Contains(reference.Name))
+            // Don't raise the event if ignored.  Also, a bit of a hack for now.  If it's a "System." or a
+            // "Microsoft." assembly, just ignore it.  There are some issues resolving some of the .NETCore
+            // and .NETStandard assemblies due to variations in how they are distributed.
+            if(!ignoreIfUnresolved.Contains(reference.Name) && !reference.Name.StartsWith("System.",
+              StringComparison.Ordinal) && !reference.Name.StartsWith("Microsoft.", StringComparison.Ordinal))
                 OnUnresolvedAssemblyReference(reference, module);
             else
                 ConsoleApplication.WriteMessage(LogLevel.Warn, "Ignoring unresolved assembly " +

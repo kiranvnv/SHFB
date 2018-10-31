@@ -22,6 +22,8 @@
 // 1.9.3.3  12/28/2011  EFW  Added support for MainButtonCommandTarget
 //=============================================================================
 
+// Ignore Spelling: Huy Pham
+
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -38,7 +40,7 @@ namespace SandcastleBuilder.WPF.Controls
     /// <para><b>NOTE:</b> This control's resources must be included in the application, window, or user control
     /// resources.  For example:</para>
     /// 
-    /// <code lang="xml">
+    /// <code language="xml">
     /// &lt;Application.Resources&gt;
     ///   &lt;ResourceDictionary Source="/SandcastleBuilder.WPF;component/Controls/SplitButtonStyle.xaml" /&gt;
     /// &lt;/Application.Resources&gt;

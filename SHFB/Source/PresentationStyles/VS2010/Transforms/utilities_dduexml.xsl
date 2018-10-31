@@ -1082,6 +1082,11 @@
 					<xsl:with-param name="p_syntaxKeyword" select="$v_syntaxKeyword"/>
 				</xsl:call-template>
 			</xsl:when>
+			<xsl:when test="$v_keyword='sealed' or $v_keyword='NotInheritable'">
+				<xsl:call-template name="t_sealedKeyword">
+					<xsl:with-param name="p_syntaxKeyword" select="$v_syntaxKeyword"/>
+				</xsl:call-template>
+			</xsl:when>
 			<xsl:when test="$v_keyword='async' or $v_keyword='Async'">
 				<xsl:call-template name="t_asyncKeyword">
 					<xsl:with-param name="p_syntaxKeyword" select="$v_syntaxKeyword"/>
@@ -1242,6 +1247,10 @@
 				<xsl:apply-templates />
 			</u>
 		</xsl:if>
+	</xsl:template>
+
+	<xsl:template match="ddue:lineBreak" name="t_ddue_lineBreak">
+		<br />
 	</xsl:template>
 
 	<xsl:template match="ddue:literal"
@@ -1480,9 +1489,15 @@
 					<xsl:value-of select="@autoUpgrade"/>
 				</xsl:attribute>
 			</xsl:if>
-			<xsl:if test="normalize-space(@linkText)">
-				<xsl:value-of select="normalize-space(@linkText)"/>
-			</xsl:if>
+			<xsl:choose>
+				<xsl:when test="normalize-space(@linkText)">
+					<xsl:value-of select="normalize-space(@linkText)"/>
+				</xsl:when>
+				<xsl:when test="starts-with(normalize-space(.), 'R:')">
+					<include item="topicTitle_root" />
+				</xsl:when>
+				<xsl:otherwise />
+			</xsl:choose>
 		</referenceLink>
 	</xsl:template>
 

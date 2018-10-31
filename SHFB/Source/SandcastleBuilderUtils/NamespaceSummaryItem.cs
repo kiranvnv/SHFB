@@ -2,8 +2,8 @@
 // System  : Sandcastle Help File Builder Utilities
 // File    : NamespaceSummaryItem.cs
 // Author  : Eric Woodruff  (Eric@EWoodruff.us)
-// Updated : 05/16/2015
-// Note    : Copyright 2006-2015, Eric Woodruff, All rights reserved
+// Updated : 10/18/2017
+// Note    : Copyright 2006-2017, Eric Woodruff, All rights reserved
 // Compiler: Microsoft Visual C#
 //
 // This file contains a class representing a namespace summary item that can be used to add comments to a
@@ -21,8 +21,11 @@
 // 11/30/2013  EFW  Merged changes from Stazzz to support namespace grouping
 //===============================================================================================================
 
+// Ignore Spelling: Stazzz
+
 using System;
 using System.ComponentModel;
+using System.Runtime.CompilerServices;
 
 namespace SandcastleBuilder.Utils
 {
@@ -30,7 +33,7 @@ namespace SandcastleBuilder.Utils
     /// This represents a a namespace summary item that can be used to add comments to a namespace in the help
     /// file or exclude it completely from the help file.
     /// </summary>
-    public class NamespaceSummaryItem
+    public class NamespaceSummaryItem : INotifyPropertyChanged
     {
         #region Private data members
         //=====================================================================
@@ -65,7 +68,7 @@ namespace SandcastleBuilder.Utils
             set
             {
                 isDocumented = value;
-                this.IsDirty = true;
+                this.OnPropertyChanged();
             }
         }
 
@@ -78,7 +81,7 @@ namespace SandcastleBuilder.Utils
             set
             {
                 summary = (value ?? String.Empty).Trim();
-                this.IsDirty = true;
+                this.OnPropertyChanged();
             }
         }
 
@@ -119,6 +122,23 @@ namespace SandcastleBuilder.Utils
         public override string ToString()
         {
             return this.Name;
+        }
+        #endregion
+
+        #region INotifyPropertyChanged implementation
+        //=====================================================================
+
+        /// <inheritdoc />
+        public event PropertyChangedEventHandler PropertyChanged;
+
+        /// <summary>
+        /// This is used to raise the <see cref="PropertyChanged"/> event
+        /// </summary>
+        /// <param name="caller">The name of the caller used as the property name</param>
+        private void OnPropertyChanged([CallerMemberName]string caller = null)
+        {
+            this.IsDirty = true;
+            this.PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(caller));
         }
         #endregion
     }

@@ -218,8 +218,17 @@ namespace Microsoft.Ddue.Tools
                 writer.WriteKeyword("function get");
                 writer.WriteString(" ");
                 writer.WriteIdentifier(name);
-                writer.WriteString(" () : ");
-                WriteTypeReference(type, writer);
+
+                // Some F# properties don't generate return type info for some reason.  It's probably unsupported
+                // but just ignore them for now and write out what we do have.
+                if(type != null)
+                {
+                    writer.WriteString(" () : ");
+                    WriteTypeReference(type, writer);
+                }
+                else
+                    writer.WriteString(" ()");
+
                 writer.WriteLine();
             }
 
@@ -239,8 +248,15 @@ namespace Microsoft.Ddue.Tools
                 writer.WriteIdentifier(name);
                 writer.WriteString(" (");
                 writer.WriteParameter("value");
-                writer.WriteString(" : ");
-                WriteTypeReference(type, writer);
+
+                // Some F# properties don't generate return type info for some reason.  It's probably unsupported
+                // but just ignore them for now and write out what we do have.
+                if(type != null)
+                {
+                    writer.WriteString(" : ");
+                    WriteTypeReference(type, writer);
+                }
+
                 writer.WriteString(")");
             }
 
@@ -301,7 +317,7 @@ namespace Microsoft.Ddue.Tools
             writer.WriteMessage("UnsupportedEvent_" + Language);
         }
 
-        private static void WriteBaseClass(XPathNavigator reflection, SyntaxWriter writer)
+        private void WriteBaseClass(XPathNavigator reflection, SyntaxWriter writer)
         {
             XPathNavigator baseClass = reflection.SelectSingleNode(apiBaseClassExpression);
 
@@ -314,12 +330,12 @@ namespace Microsoft.Ddue.Tools
             }
         }
 
-        private static void WriteInterfaceList(XPathNavigator reflection, SyntaxWriter writer)
+        private void WriteInterfaceList(XPathNavigator reflection, SyntaxWriter writer)
         {
             WriteInterfaceList("implements", reflection, writer);
         }
 
-        private static void WriteInterfaceList(string keyword, XPathNavigator reflection, SyntaxWriter writer)
+        private void WriteInterfaceList(string keyword, XPathNavigator reflection, SyntaxWriter writer)
         {
             XPathNodeIterator implements = reflection.Select(apiImplementedInterfacesExpression);
 
@@ -391,12 +407,12 @@ namespace Microsoft.Ddue.Tools
             }
         }
 
-        private static void WriteParameterList(XPathNavigator reflection, SyntaxWriter writer)
+        private void WriteParameterList(XPathNavigator reflection, SyntaxWriter writer)
         {
             WriteParameterList(reflection, writer, true);
         }
 
-        private static void WriteParameterList(XPathNavigator reflection, SyntaxWriter writer, bool newlines)
+        private void WriteParameterList(XPathNavigator reflection, SyntaxWriter writer, bool newlines)
         {
             XPathNodeIterator parameters = reflection.Select(apiParametersExpression);
 
@@ -425,7 +441,7 @@ namespace Microsoft.Ddue.Tools
         }
 
         // JScript has no in, out, optional, or reference parameters
-        private static void WriteParameter(XPathNavigator parameter, SyntaxWriter writer)
+        private void WriteParameter(XPathNavigator parameter, SyntaxWriter writer)
         {
             string name = (string)parameter.Evaluate(parameterNameExpression);
             XPathNavigator type = parameter.SelectSingleNode(parameterTypeExpression);
@@ -470,108 +486,63 @@ namespace Microsoft.Ddue.Tools
             writer.WriteString(" ");
         }
 
-        private static void WriteTypeReference(XPathNavigator reference, SyntaxWriter writer)
-        {
-            switch(reference.LocalName)
-            {
-                case "arrayOf":
-                    int rank = Convert.ToInt32(reference.GetAttribute("rank", String.Empty),
-                        CultureInfo.InvariantCulture);
-
-                    XPathNavigator element = reference.SelectSingleNode(typeExpression);
-                    WriteTypeReference(element, writer);
-                    writer.WriteString("[");
-
-                    for(int i = 1; i < rank; i++)
-                        writer.WriteString(",");
-
-                    writer.WriteString("]");
-                    break;
-
-                case "pointerTo":
-                    XPathNavigator pointee = reference.SelectSingleNode(typeExpression);
-                    WriteTypeReference(pointee, writer);
-                    writer.WriteString("*");
-                    break;
-                case "referenceTo":
-                    XPathNavigator referee = reference.SelectSingleNode(typeExpression);
-                    WriteTypeReference(referee, writer);
-                    break;
-                case "type":
-                    string id = reference.GetAttribute("api", String.Empty);
-                    WriteNormalTypeReference(id, writer);
-                    XPathNodeIterator typeModifiers = reference.Select(typeModifiersExpression);
-                    while(typeModifiers.MoveNext())
-                    {
-                        WriteTypeReference(typeModifiers.Current, writer);
-                    }
-                    break;
-                case "template":
-                    string name = reference.GetAttribute("name", String.Empty);
-                    writer.WriteString(name);
-                    XPathNodeIterator modifiers = reference.Select(typeModifiersExpression);
-                    while(modifiers.MoveNext())
-                    {
-                        WriteTypeReference(modifiers.Current, writer);
-                    }
-                    break;
-                case "specialization":
-                    writer.WriteString("<");
-                    XPathNodeIterator arguments = reference.Select(specializationArgumentsExpression);
-                    while(arguments.MoveNext())
-                    {
-                        if(arguments.CurrentPosition > 1)
-                            writer.WriteString(", ");
-                        WriteTypeReference(arguments.Current, writer);
-                    }
-                    writer.WriteString(">");
-                    break;
-            }
-        }
-
-        private static void WriteNormalTypeReference(string api, SyntaxWriter writer)
+        /// <inheritdoc />
+        protected override void WriteNormalTypeReference(string api, SyntaxWriter writer)
         {
             switch(api)
             {
                 case "T:System.Boolean":
                     writer.WriteReferenceLink(api, "boolean");
                     break;
+
                 case "T:System.Byte":
                     writer.WriteReferenceLink(api, "byte");
                     break;
+
                 case "T:System.SByte":
                     writer.WriteReferenceLink(api, "sbyte");
                     break;
+
                 case "T:System.Char":
                     writer.WriteReferenceLink(api, "char");
                     break;
+
                 case "T:System.Int16":
                     writer.WriteReferenceLink(api, "short");
                     break;
+
                 case "T:System.Int32":
                     writer.WriteReferenceLink(api, "int");
                     break;
+
                 case "T:System.Int64":
                     writer.WriteReferenceLink(api, "long");
                     break;
+
                 case "T:System.UInt16":
                     writer.WriteReferenceLink(api, "ushort");
                     break;
+
                 case "T:System.UInt32":
                     writer.WriteReferenceLink(api, "uint");
                     break;
+
                 case "T:System.UInt64":
                     writer.WriteReferenceLink(api, "ulong");
                     break;
+
                 case "T:System.Single":
                     writer.WriteReferenceLink(api, "float");
                     break;
+
                 case "T:System.Double":
                     writer.WriteReferenceLink(api, "double");
                     break;
+
                 case "T:System.Decimal":
                     writer.WriteReferenceLink(api, "decimal");
                     break;
+
                 default:
                     writer.WriteReferenceLink(api);
                     break;

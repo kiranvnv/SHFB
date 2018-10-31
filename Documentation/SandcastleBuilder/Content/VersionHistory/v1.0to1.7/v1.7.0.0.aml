@@ -1,6 +1,7 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <topic id="a44fe561-efb9-40ac-84eb-b1a00a4a9596" revisionNumber="1">
 	<developerConceptualDocument xmlns="http://ddue.schemas.microsoft.com/authoring/2003/5" xmlns:xlink="http://www.w3.org/1999/xlink">
+		<!-- Ignore Spelling: lang vsimport helpattr Prantl -->
 		<introduction>
 			<autoOutline lead="Version 1.7.0.0 was released on June 2nd, 2008."
         excludeRelatedTopics="true" />
@@ -324,8 +325,7 @@ shorter title or description to use as the default link text.</para>
 
 				<list class="bullet">
 					<listItem>
-						<para>Added support for the <codeInline>&lt;inheritdoc /&gt;</codeInline> XML comments tag. See the
-<link xlink:href="79897974-ffc9-4b84-91a5-e50c66a0221d" /> topic in the help file for details.</para>
+						<para>Added support for the <codeInline>&lt;inheritdoc /&gt;</codeInline> XML comments tag.</para>
 					</listItem>
 
 					<listItem>
@@ -483,9 +483,9 @@ files for various foreign languages.</para>
 							</listItem>
 
 							<listItem>
-								<para><link xlink:href="aa7bcd07-1a86-42dc-9f1d-49bd4afeb5d2" /> - This is used to rearrange the
-table of contents such that namespaces are nested within their parent namespaces rather than appearing as a flat
-list of all namespaces at the root level.</para>
+								<para>Hierarchical TOC Plug-In - This is used to rearrange the table of contents such that
+namespaces are nested within their parent namespaces rather than appearing as a flat list of all namespaces at
+the root level.</para>
 							</listItem>
 
 							<listItem>
@@ -523,11 +523,10 @@ paths for the deployment locations.  Relative file paths will be relative to the
 					<listItem>
 						<para>The table of contents entries for additional content items can now be split such that some
 appear before and some after the API topics.  The <codeInline>ContentPlacement</codeInline> property's setting
-will be ignored if the table of contents is split via a <link xlink:href="54de66c4-a57a-4bfc-9eb6-bd9e6fb56589">custom tag</link>
-in one of the additional content files or a <link xlink:href="3dd5fe3b-1bc3-42e5-8900-56165e3f9aed">site map</link>
-is defined that specifies a split table of contents.  In such cases, items prior to the entry with the "split"
-option will appear before the API content.  The item with the "split" option and all items after it will appear
-below the API content.</para>
+will be ignored if the table of contents is split via a custom tag in one of the additional content files or a
+<link xlink:href="3dd5fe3b-1bc3-42e5-8900-56165e3f9aed">site map</link> is defined that specifies a split table
+of contents.  In such cases, items prior to the entry with the "split" option will appear before the API content.
+The item with the "split" option and all items after it will appear below the API content.</para>
 					</listItem>
 
 					<listItem>
@@ -629,7 +628,7 @@ license used by Sandcastle itself.</para>
 				<para>A set of custom code providers is now available that simplifies obtaining XML comments files for C#
 and VB.NET website projects.  In combination with the new wildcard support in the help file builder's Assemblies
 to Document list, producing a help file for websites is now a much simpler task. Use the custom code providers
-available as part of the Sandcastle tools installer.</para>
+available as part of the Sandcastle Help File Builder.</para>
 			</content>
 		</section>
 

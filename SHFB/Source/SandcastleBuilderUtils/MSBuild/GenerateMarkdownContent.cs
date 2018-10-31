@@ -2,8 +2,8 @@
 // System  : Sandcastle Help File Builder MSBuild Tasks
 // File    : GenerateMarkdownContent.cs
 // Author  : Eric Woodruff  (Eric@EWoodruff.us)
-// Updated : 05/24/2015
-// Note    : Copyright 2015, Eric Woodruff, All rights reserved
+// Updated : 04/05/2017
+// Note    : Copyright 2015-2017, Eric Woodruff, All rights reserved
 // Compiler: Microsoft Visual C#
 //
 // This file contains the MSBuild task used to finish up creation of the markdown content and copy it to the
@@ -18,6 +18,8 @@
 // ==============================================================================================================
 // 03/30/2015  EFW  Created the code
 //===============================================================================================================
+
+// Ignore Spelling: blockquote dl ol ul noscript fieldset iframe
 
 using System;
 using System.Collections.Generic;
@@ -69,6 +71,11 @@ namespace SandcastleBuilder.Utils.MSBuild
         /// specified, this file will be copied to create Home.md.
         /// </summary>
         public string DefaultTopic { get; set; }
+
+        /// <summary>
+        /// This is used to pass in whether or not to append extensions to the sidebar topic links
+        /// </summary>
+        public bool AppendMarkdownFileExtensionsToUrls { get; set; }
 
         #endregion
 
@@ -123,7 +130,7 @@ namespace SandcastleBuilder.Utils.MSBuild
 
                                 if(topic != null)
                                 {
-                                    title = ApplyChanges(topic) ?? key;
+                                    title = ApplyChanges(key, topic) ?? key;
 
                                     // Remove the containing document element and save the inner content
                                     string content = topic.ToString(SaveOptions.DisableFormatting);
@@ -172,7 +179,8 @@ namespace SandcastleBuilder.Utils.MSBuild
                                     if(tocReader.Depth > 1)
                                         sidebar.Write(new String(' ', (tocReader.Depth - 1) * 2));
 
-                                    sidebar.WriteLine("- [{0}]({1})", title, key);
+                                    sidebar.WriteLine("- [{0}]({1}{2})", title, key,
+                                        this.AppendMarkdownFileExtensionsToUrls ? ".md" : String.Empty);
 
                                     topicCount++;
 
@@ -215,9 +223,10 @@ namespace SandcastleBuilder.Utils.MSBuild
         /// <summary>
         /// This applies the changes needed to convert the XML to a markdown topic file
         /// </summary>
+        /// <param name="key">The topic key</param>
         /// <param name="topic">The topic to which the changes are applied</param>
         /// <returns>The page title if one could be found</returns>
-        private static string ApplyChanges(XDocument topic)
+        private string ApplyChanges(string key, XDocument topic)
         {
             string topicTitle = null;
             var root = topic.Root;
@@ -301,9 +310,21 @@ namespace SandcastleBuilder.Utils.MSBuild
                             // themselves.  The transformations always add a PageHeader link span after the page
                             // title (or should).
                             if(id.StartsWith("@pageHeader_", StringComparison.Ordinal))
-                                linkTargets.Add(id.Substring(12), "PageHeader");
+                            {
+                                if(linkTargets.ContainsKey(id.Substring(12)))
+                                    Log.LogWarning(null, "GMC0001", "GMC0001", "SHFB", 0, 0, 0, 0,
+                                        "Duplicate in-page link ID found: Topic ID: {0}  Link ID: {1}", key, id);
+
+                                linkTargets[id.Substring(12)] = "PageHeader";
+                            }
                             else
-                                linkTargets.Add(id, "#" + title);
+                            {
+                                if(linkTargets.ContainsKey(id))
+                                    Log.LogWarning(null, "GMC0001", "GMC0001", "SHFB", 0, 0, 0, 0,
+                                        "Duplicate in-page link ID found: Topic ID: {0}  Link ID: {1}", key, id);
+
+                                linkTargets[id] = "#" + title;
+                            }
                         }
                     }
                 }

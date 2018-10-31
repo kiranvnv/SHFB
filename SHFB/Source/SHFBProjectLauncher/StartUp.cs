@@ -2,23 +2,23 @@
 // System  : Sandcastle Help File Builder Project Launcher
 // File    : StartUp.cs
 // Author  : Eric Woodruff  (Eric@EWoodruff.us)
-// Updated : 03/18/2014
-// Note    : Copyright 2011-2014, Eric Woodruff, All rights reserved
+// Updated : 12/13/2017
+// Note    : Copyright 2011-2017, Eric Woodruff, All rights reserved
 // Compiler: Microsoft Visual C#
 //
 // This application provides a way for the user to choose which application is used to load help file builder
 // project files (.shfbproj).
 //
 // This code is published under the Microsoft Public License (Ms-PL).  A copy of the license should be
-// distributed with the code.  It can also be found at the project website: https://GitHub.com/EWSoftware/SHFB.  This
+// distributed with the code and can be found at the project website: https://GitHub.com/EWSoftware/SHFB.  This
 // notice, the author's name, and all copyright notices must remain intact in all applications, documentation,
 // and source files.
 //
-// Version     Date     Who  Comments
+//    Date     Who  Comments
 // ==============================================================================================================
-// 1.9.3.1  04/19/2011  EFW  Created the code
-// 1.9.3.3  11/19/2011  EFW  Fixed up parameter passed to Process.Start()
-// 1.9.5.0  09/22/2012  EFW  Updated to launch latest Visual Studio version with the VS Package installed
+// 04/19/2011  EFW  Created the code
+// 11/19/2011  EFW  Fixed up parameter passed to Process.Start()
+// 09/22/2012  EFW  Updated to launch latest Visual Studio version with the VS Package installed
 //===============================================================================================================
 
 using System;
@@ -26,7 +26,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Windows.Forms;
+using System.Windows;
 
 using SandcastleBuilder.ProjectLauncher.Properties;
 
@@ -74,15 +74,35 @@ namespace SandcastleBuilder.ProjectLauncher
         {
             get
             {
-                string vsPath = FindVisualStudioPath("VS120COMNTOOLS", "12.0");
+                // VS 2017 editions can be installed side-by-side and no longer use an environment variable to
+                // indicate their location so find the first one available based on the usual install location.
+                string vsPath = FindVisualStudioPath(@"%ProgramFiles(x86)%\Microsoft Visual Studio\2017\Community\Common7\IDE");
 
-                if(vsPath == null)
-                    vsPath = FindVisualStudioPath("VS110COMNTOOLS", "11.0");
+                if(vsPath != null)
+                    return vsPath;
 
-                if(vsPath == null)
-                    vsPath = FindVisualStudioPath("VS100COMNTOOLS", "10.0");
+                vsPath = FindVisualStudioPath(@"%ProgramFiles(x86)%\Microsoft Visual Studio\2017\Professional\Common7\IDE");
 
-                return vsPath;
+                if(vsPath != null)
+                    return vsPath;
+
+                vsPath = FindVisualStudioPath(@"%ProgramFiles(x86)%\Microsoft Visual Studio\2017\Enterprise\Common7\IDE");
+
+                if(vsPath != null)
+                    return vsPath;
+
+                // VS 2015 and earlier install to a single location pointed to by an environment variable
+                vsPath = FindVisualStudioPath(@"%VS140COMNTOOLS%\..\IDE");
+
+                if(vsPath != null)
+                    return vsPath;
+
+                vsPath = FindVisualStudioPath(@"%VS140COMNTOOLS%\..\IDE");
+
+                if(vsPath != null)
+                    return vsPath;
+
+                return FindVisualStudioPath(@"%VS120COMNTOOLS%\..\IDE");
             }
         }
 
@@ -121,9 +141,6 @@ namespace SandcastleBuilder.ProjectLauncher
               StringComparison.OrdinalIgnoreCase))
                 ProjectToLoad = null;
 
-            Application.EnableVisualStyles();
-            Application.SetCompatibleTextRenderingDefault(false);
-
             // Bring forward user preferences after a version update
             if(!Settings.Default.SettingsUpgraded)
             {
@@ -133,7 +150,11 @@ namespace SandcastleBuilder.ProjectLauncher
             }
 
             if(!LaunchWithPreferredApplication())
-                Application.Run(new ProjectLauncherForm());
+            {
+                var app = new Application();
+
+                app.Run(new ProjectLauncherDlg());
+            }
         }
         #endregion
 
@@ -148,7 +169,8 @@ namespace SandcastleBuilder.ProjectLauncher
         {
             bool success = false;
 
-            // If no project or VS 2010 is present but no preference has been specified, ask the user what to use
+            // If no project or Visual Studio is present but no preference has been specified, ask the user what
+            // to use.
             if(String.IsNullOrEmpty(ProjectToLoad) ||
               (!Settings.Default.AlwaysUseSelection && !String.IsNullOrEmpty(VisualStudioPath)) ||
               (String.IsNullOrEmpty(VisualStudioPath) && !Settings.Default.UseStandaloneGui))
@@ -172,7 +194,7 @@ namespace SandcastleBuilder.ProjectLauncher
             {
                 MessageBox.Show("Unable to determine which application to use to launch the selected " +
                     "help file builder project: " + ex.Message, "Sandcastle Help File Builder Project Launcher",
-                    MessageBoxButtons.OK, MessageBoxIcon.Stop, MessageBoxDefaultButton.Button1,
+                    MessageBoxButton.OK, MessageBoxImage.Stop, MessageBoxResult.OK,
                     MessageBoxOptions.DefaultDesktopOnly);
             }
 
@@ -182,7 +204,7 @@ namespace SandcastleBuilder.ProjectLauncher
         /// <summary>
         /// This is used to try to launch the project using the selected application
         /// </summary>
-        /// <param name="useStandaloneGui">True to use the standalone GUI or false to use Visual Studio 2010</param>
+        /// <param name="useStandaloneGui">True to use the standalone GUI or false to use Visual Studio</param>
         /// <returns>True if successful, false if not</returns>
         public static bool LaunchWithSelectedApplication(bool useStandaloneGui)
         {
@@ -209,7 +231,7 @@ namespace SandcastleBuilder.ProjectLauncher
             {
                 MessageBox.Show("Unable to determine which application to use to launch the selected " +
                     "help file builder project: " + ex.Message, "Sandcastle Help File Builder Project Launcher",
-                    MessageBoxButtons.OK, MessageBoxIcon.Stop, MessageBoxDefaultButton.Button1,
+                    MessageBoxButton.OK, MessageBoxImage.Stop, MessageBoxResult.OK,
                     MessageBoxOptions.DefaultDesktopOnly);
             }
 
@@ -219,32 +241,32 @@ namespace SandcastleBuilder.ProjectLauncher
         /// <summary>
         /// This is used to find the Visual Studio path using the given tools environment variable and version
         /// </summary>
-        /// <param name="toolsVar">The tools environment variable</param>
-        /// <param name="version">The version</param>
+        /// <param name="pathToCheck">The potential Visual Studio path to check</param>
         /// <returns>The path to the given Visual Studio version or null if not found or the SHFB VS Package is
         /// not installed for it.</returns>
-        private static string FindVisualStudioPath(string toolsVar, string version)
+        private static string FindVisualStudioPath(string pathToCheck)
         {
-            string vsPath = Environment.GetEnvironmentVariable(toolsVar, EnvironmentVariableTarget.Machine);
+            string vsPath = Environment.ExpandEnvironmentVariables(pathToCheck);
 
-            if(!String.IsNullOrEmpty(vsPath))
+            if(!String.IsNullOrEmpty(vsPath) && vsPath.IndexOf('%') == -1)
             {
-                vsPath = Path.Combine(vsPath, @"..\IDE\devenv.exe");
+                vsPath = Path.Combine(vsPath, @"devenv.exe");
 
                 if(!File.Exists(vsPath))
                     vsPath = null;
                 else
                 {
-                    // Check for VSPackage too.  If not present, we can't load the project.
-                    string vsPackagePath = Path.Combine(Environment.GetFolderPath(
-                        Environment.SpecialFolder.LocalApplicationData),
-                        @"Microsoft\VisualStudio\" + version + @"\Extensions");
+                    // Check for VSPackage too.  If not present, we can't load the project.  It should exist
+                    // in the All Users location.
+                    string vsPackagePath = Path.Combine(Path.GetDirectoryName(vsPath), "Extensions");
 
                     if(!Directory.Exists(vsPackagePath) || !Directory.EnumerateFiles(vsPackagePath,
                       "SandcastleBuilder.Package.dll", SearchOption.AllDirectories).Any())
                         vsPath = null;
                 }
             }
+            else
+                vsPath = null;
 
             return vsPath;
         }

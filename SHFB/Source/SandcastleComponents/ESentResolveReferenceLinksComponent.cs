@@ -2,7 +2,7 @@
 // System  : Sandcastle Help File Builder Components
 // File    : ESentResolveReferenceLinksComponent.cs
 // Author  : Eric Woodruff  (Eric@EWoodruff.us)
-// Updated : 04/01/2015
+// Updated : 01/26/2016
 // Compiler: Microsoft Visual C#
 //
 // This is a version of the ResolveReferenceLinksComponent that stores the MSDN content IDs and the framework
@@ -32,7 +32,7 @@ using System.Xml.XPath;
 using Sandcastle.Core.BuildAssembler;
 using Sandcastle.Core.BuildAssembler.BuildComponent;
 
-using Microsoft.Ddue.Tools;
+using Microsoft.Ddue.Tools.BuildComponent;
 using Microsoft.Ddue.Tools.Targets;
 
 using Microsoft.Isam.Esent.Collections.Generic;
@@ -69,16 +69,16 @@ namespace SandcastleBuilder.Components
             /// </summary>
             public ESentResolveReferenceLinksComponentFactory()
             {
-                base.ReferenceBuildPlacement = new ComponentPlacement(PlacementAction.Replace,
+                this.ReferenceBuildPlacement = new ComponentPlacement(PlacementAction.Replace,
                     "Resolve Reference Links Component");
-                base.ConceptualBuildPlacement = new ComponentPlacement(PlacementAction.Replace,
+                this.ConceptualBuildPlacement = new ComponentPlacement(PlacementAction.Replace,
                     "Resolve Reference Links Component");
             }
 
             /// <inheritdoc />
             public override BuildComponentCore Create()
             {
-                return new ESentResolveReferenceLinksComponent(base.BuildAssembler);
+                return new ESentResolveReferenceLinksComponent(this.BuildAssembler);
             }
 
             /// <inheritdoc />
@@ -93,7 +93,7 @@ namespace SandcastleBuilder.Components
 <helpOutput format=""HtmlHelp1"">
 	<msdnContentIdCache path=""{@LocalDataFolder}Cache\MsdnContentId.cache""
 		cachePath=""{@LocalDataFolder}Cache\ESentMsdnContentIdCache"" localCacheSize=""2500"" />
-	<targets base=""{@SHFBFolder}Data\{@TargetFrameworkIdentifier}"" recurse=""true"" files=""*.xml""
+	<targets base=""{@FrameworkReflectionDataFolder}"" recurse=""true"" files=""*.xml""
 		type=""{@HtmlSdkLinkType}"" id=""FrameworkTargets""
 		cachePath=""{@LocalDataFolder}Cache\ESentFrameworkTargetCache"" localCacheSize=""2500"">
 		{@ReferenceLinkNamespaceFiles}
@@ -104,7 +104,7 @@ namespace SandcastleBuilder.Components
 <helpOutput format=""MSHelpViewer"">
 	<msdnContentIdCache path=""{@LocalDataFolder}Cache\MsdnContentId.cache""
 		cachePath=""{@LocalDataFolder}Cache\ESentMsdnContentIdCache"" localCacheSize=""2500"" />
-	<targets base=""{@SHFBFolder}Data\{@TargetFrameworkIdentifier}"" recurse=""true"" files=""*.xml""
+	<targets base=""{@FrameworkReflectionDataFolder}"" recurse=""true"" files=""*.xml""
 		type=""{@MSHelpViewerSdkLinkType}"" id=""FrameworkTargets""
 		cachePath=""{@LocalDataFolder}Cache\ESentFrameworkTargetCache"" localCacheSize=""2500"">
 		{@ReferenceLinkNamespaceFiles}
@@ -115,7 +115,7 @@ namespace SandcastleBuilder.Components
 <helpOutput format=""Website"">
 	<msdnContentIdCache path=""{@LocalDataFolder}Cache\MsdnContentId.cache""
 		cachePath=""{@LocalDataFolder}Cache\ESentMsdnContentIdCache"" localCacheSize=""2500"" />
-	<targets base=""{@SHFBFolder}Data\{@TargetFrameworkIdentifier}"" recurse=""true"" files=""*.xml""
+	<targets base=""{@FrameworkReflectionDataFolder}"" recurse=""true"" files=""*.xml""
 		type=""{@WebsiteSdkLinkType}"" id=""FrameworkTargets""
 		cachePath=""{@LocalDataFolder}Cache\ESentFrameworkTargetCache"" localCacheSize=""2500"">
 		{@ReferenceLinkNamespaceFiles}
@@ -126,7 +126,7 @@ namespace SandcastleBuilder.Components
 <helpOutput format=""OpenXml"">
 	<msdnContentIdCache path=""{@LocalDataFolder}Cache\MsdnContentId.cache""
 		cachePath=""{@LocalDataFolder}Cache\ESentMsdnContentIdCache"" localCacheSize=""2500"" />
-	<targets base=""{@SHFBFolder}Data\{@TargetFrameworkIdentifier}"" recurse=""true"" files=""*.xml""
+	<targets base=""{@FrameworkReflectionDataFolder}"" recurse=""true"" files=""*.xml""
 		type=""{@WebsiteSdkLinkType}"" id=""FrameworkTargets""
 		cachePath=""{@LocalDataFolder}Cache\ESentFrameworkTargetCache"" localCacheSize=""2500"">
 		{@ReferenceLinkNamespaceFiles}
@@ -137,7 +137,7 @@ namespace SandcastleBuilder.Components
 <helpOutput format=""Markdown"">
 	<msdnContentIdCache path=""{@LocalDataFolder}Cache\MsdnContentId.cache""
 		cachePath=""{@LocalDataFolder}Cache\ESentMsdnContentIdCache"" localCacheSize=""2500"" />
-	<targets base=""{@SHFBFolder}Data\{@TargetFrameworkIdentifier}"" recurse=""true"" files=""*.xml""
+	<targets base=""{@FrameworkReflectionDataFolder}"" recurse=""true"" files=""*.xml""
 		type=""{@WebsiteSdkLinkType}"" id=""FrameworkTargets""
 		cachePath=""{@LocalDataFolder}Cache\ESentFrameworkTargetCache"" localCacheSize=""2500"">
 		{@ReferenceLinkNamespaceFiles}
@@ -188,7 +188,7 @@ namespace SandcastleBuilder.Components
             Assembly asm = Assembly.GetExecutingAssembly();
             FileVersionInfo fvi = FileVersionInfo.GetVersionInfo(asm.Location);
 
-            base.WriteMessage(MessageLevel.Info, String.Format(CultureInfo.InvariantCulture,
+            this.WriteMessage(MessageLevel.Info, String.Format(CultureInfo.InvariantCulture,
                 "[{0}, version {1}]\r\n    ESENT Resolve Reference Links Component.  {2}\r\n" +
                 "    https://GitHub.com/EWSoftware/SHFB", fvi.ProductName, fvi.ProductVersion, fvi.LegalCopyright));
 
@@ -250,12 +250,12 @@ namespace SandcastleBuilder.Components
                     if(cacheCount == 0)
                     {
                         // Log a diagnostic message since looking up all IDs can significantly slow the build
-                        base.WriteMessage(MessageLevel.Diagnostic, "The ESENT MSDN content ID cache in '" +
+                        this.WriteMessage(MessageLevel.Diagnostic, "The ESENT MSDN content ID cache in '" +
                             msdnIdCachePath + "' does not exist yet.  All IDs will be looked up in this build " +
                             "which will slow it down.");
                     }
                     else
-                        base.WriteMessage(MessageLevel.Info, "{0} cached MSDN content ID entries exist", cacheCount);
+                        this.WriteMessage(MessageLevel.Info, "{0} cached MSDN content ID entries exist", cacheCount);
 
                     BuildComponentCore.Data[SharedMsdnContentIdCacheId] = resolver.MsdnContentIdCache;
                 }
@@ -287,7 +287,7 @@ namespace SandcastleBuilder.Components
                 }
                 catch(Exception ex)
                 {
-                    base.WriteMessage(MessageLevel.Error, BuildComponentUtilities.GetExceptionMessage(ex));
+                    this.WriteMessage(MessageLevel.Error, BuildComponentUtilities.GetExceptionMessage(ex));
                 }
             }
 
@@ -299,17 +299,17 @@ namespace SandcastleBuilder.Components
         /// </summary>
         public override void UpdateMsdnContentIdCache()
         {
-            if(ownsResolverCache && base.MsdnResolver != null)
+            if(ownsResolverCache && this.MsdnResolver != null)
             {
-                var cache = base.MsdnResolver.MsdnContentIdCache as PersistentDictionary<string, string>;
+                var cache = this.MsdnResolver.MsdnContentIdCache as PersistentDictionary<string, string>;
 
                 if(cache != null)
                 {
-                    if(base.MsdnResolver.CacheItemsAdded)
-                        base.WriteMessage(MessageLevel.Diagnostic, "New MSDN content ID cache size: {0} entries",
-                            cache.Count);
+                    if(MsdnResolver.CacheItemsAdded != 0)
+                        this.WriteMessage(MessageLevel.Diagnostic, "{0} entries added to the MSDN content ID " +
+                            "cache.  New cache size: {1} entries", MsdnResolver.CacheItemsAdded, cache.Count);
 
-                    base.WriteMessage(MessageLevel.Diagnostic, "MSDN content ID ESENT local cache flushed {0} " +
+                    this.WriteMessage(MessageLevel.Diagnostic, "MSDN content ID ESENT local cache flushed {0} " +
                         "time(s).  Current ESENT local cache usage: {1} of {2}.", cache.LocalCacheFlushCount,
                         cache.CurrentLocalCacheCount, cache.LocalCacheSize);
                 }

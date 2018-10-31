@@ -2,15 +2,15 @@
 // System  : Sandcastle Help File Builder MSBuild Tasks
 // File    : BuildOpenXmlFile.cs
 // Author  : Eric Woodruff  (Eric@EWoodruff.us)
-// Updated : 08/24/2014
-// Note    : Copyright 2014, Eric Woodruff, All rights reserved
+// Updated : 01/02/2018
+// Note    : Copyright 2014-2018, Eric Woodruff, All rights reserved
 // Compiler: Microsoft Visual C#
 //
 // This file contains the MSBuild task used to finish up creation of the Open XML file parts and compress the
 // help content into an Open XML document (a ZIP file with a .docx extension).
 //
 // This code is published under the Microsoft Public License (Ms-PL).  A copy of the license should be
-// distributed with the code.  It can also be found at the project website: https://GitHub.com/EWSoftware/SHFB.  This
+// distributed with the code and can be found at the project website: https://GitHub.com/EWSoftware/SHFB.  This
 // notice, the author's name, and all copyright notices must remain intact in all applications, documentation,
 // and source files.
 //
@@ -18,6 +18,9 @@
 // ==============================================================================================================
 // 02/16/2014  EFW  Created the code
 //===============================================================================================================
+
+// Ignore Spelling: Za num ilvl lvl ul li tbl tc br nolink selflink typeparameter img src cx cy xfrm prst
+// Ignore Spelling: rect uri pic dxa
 
 using System;
 using System.Collections.Generic;
@@ -71,6 +74,12 @@ namespace SandcastleBuilder.Utils.MSBuild
 
         private HashSet<string> archiveFiles;
         private long addCount, fileCount, compressedSize, uncompressedSize;
+
+        // This defines a set of parent elements that can contain text that does not need to be wrapped in
+        // a run.
+        private static HashSet<string> ignoredParents = new HashSet<string> {
+            "a", "align", "posOffset", "span", "t" };
+
         #endregion
 
         #region Task input properties
@@ -360,6 +369,18 @@ namespace SandcastleBuilder.Utils.MSBuild
         private void SaveRelationships()
         {
             string relationshipsFilename = Path.Combine(this.WorkingFolder, @"word\_rels\document.xml.rels");
+
+            // If the relationships file does not exist, see if it's there under the alternate name used to
+            // support the NuGet deployment.  Certain filenames reserved as part of the Open Packaging
+            // Conventions cause problems with NuGet packages.  This works around the issue.
+            if(!File.Exists(relationshipsFilename))
+            {
+                string altName = Path.Combine(this.WorkingFolder, @"word\_rels\document.xml_rels");
+
+                if(File.Exists(altName))
+                    File.Move(altName, relationshipsFilename);
+            }
+
             XDocument relationshipsFile = XDocument.Load(relationshipsFilename);
             XElement root = relationshipsFile.Root;
 
@@ -538,14 +559,14 @@ namespace SandcastleBuilder.Utils.MSBuild
         /// </summary>
         /// <param name="document">The document in which to wrap stray text nodes</param>
         /// <remarks>Stray text nodes can occur when resolving shared content items.  We need to ensure that
-        /// all text nodes are within a text element within a run.</remarks>
+        /// all text nodes are within a text element within a run to ensure that the document does not appear to
+        /// be corrupted.</remarks>
         private static void WrapStrayElementNodes(XDocument document)
         {
             XElement wrap;
 
             foreach(var text in document.DescendantNodes().OfType<XText>().Where(
-              t => t.Parent.Name.LocalName != "t" && t.Parent.Name.LocalName != "a" &&
-                   t.Parent.Name.LocalName != "span").ToList())
+              t => !ignoredParents.Contains(t.Parent.Name.LocalName)).ToList())
             {
 #if DEBUG
                 if(text.Parent.Name.LocalName != "body" && text.Parent.Name.LocalName != "p" && text.Parent.Name.LocalName != "tc")
@@ -1272,7 +1293,7 @@ namespace SandcastleBuilder.Utils.MSBuild
         /// </summary>
         private void GenerateFileList()
         {
-            string contentTypesFile = Path.Combine(this.WorkingFolder, "[Content_Types].xml"),
+            string altName, contentTypesFile = Path.Combine(this.WorkingFolder, "[Content_Types].xml"),
                 relsFile = Path.Combine(this.WorkingFolder, @"_rels\.rels"),
                 documentParts = Path.Combine(this.WorkingFolder, @"word\_rels\document.xml.rels"), filename,
                 mimeType;
@@ -1280,6 +1301,26 @@ namespace SandcastleBuilder.Utils.MSBuild
             archiveFiles.Add(contentTypesFile);
             archiveFiles.Add(relsFile);
             archiveFiles.Add(documentParts);
+
+            // If the content types file does not exist, see if it's there under the alternate name used to
+            // support the NuGet deployment.  Certain filenames reserved as part of the Open Packaging
+            // Conventions are ignore by NuGet when extracting package files.  This works around the issue.
+            if(!File.Exists(contentTypesFile))
+            {
+                altName = Path.Combine(this.WorkingFolder, "Content_Types.xml");
+
+                if(File.Exists(altName))
+                    File.Move(altName, contentTypesFile);
+            }
+
+            // Do the same for the relationships file
+            if(!File.Exists(relsFile))
+            {
+                altName = Path.Combine(this.WorkingFolder, @"_rels\rels.xml_rels");
+
+                if(File.Exists(altName))
+                    File.Move(altName, relsFile);
+            }
 
             XDocument contentTypes = XDocument.Load(contentTypesFile);
 

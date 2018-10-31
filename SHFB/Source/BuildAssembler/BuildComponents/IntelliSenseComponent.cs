@@ -2,8 +2,8 @@
 // System  : Sandcastle Help File Builder Components
 // File    : IntelliSenseComponent.cs
 // Author  : Eric Woodruff  (Eric@EWoodruff.us)
-// Updated : 01/24/2014
-// Note    : Copyright 2007-2014, Eric Woodruff, All rights reserved
+// Updated : 12/17/2017
+// Note    : Copyright 2007-2017, Eric Woodruff, All rights reserved
 // Compiler: Microsoft Visual C#
 //
 // This file contains a build component that is used to extract the XML comments into files that can be used for
@@ -11,37 +11,40 @@
 // members.  This is based on the Microsoft IntelliSense build component.
 //
 // This code is published under the Microsoft Public License (Ms-PL).  A copy of the license should be
-// distributed with the code.  It can also be found at the project website: https://GitHub.com/EWSoftware/SHFB.  This
+// distributed with the code and can be found at the project website: https://GitHub.com/EWSoftware/SHFB.  This
 // notice, the author's name, and all copyright notices must remain intact in all applications, documentation,
 // and source files.
 //
-// Version     Date     Who  Comments
+//    Date     Who  Comments
 // ==============================================================================================================
-// 1.6.0.1  10/09/2007  EFW  Created the code
-// 1.6.0.7  03/24/2008  EFW  Updated it to handle multiple assembly references
-// 1.8.0.3  07/04/2009  EFW  Add parameter to Dispose() to match base class
-// 2.7.3.0  12/21/2012  EFW  Replaced the Microsoft IntelliSense build component with my version
-// 2.7.5.0  11/12/2013  EFW  Added support for exporting code contracts XML comments elements
-// -------  12/23/2013  EFW  Updated the build component to be discoverable via MEF
+// 10/09/2007  EFW  Created the code
+// 03/24/2008  EFW  Updated it to handle multiple assembly references
+// 07/04/2009  EFW  Add parameter to Dispose() to match base class
+// 12/21/2012  EFW  Replaced the Microsoft IntelliSense build component with my version
+// 11/12/2013  EFW  Added support for exporting code contracts XML comments elements
+// 12/23/2013  EFW  Updated the build component to be discoverable via MEF
+// 01/07/2016  EFW  Updated to use a pipeline task for writing out the member comments for better performance
 //===============================================================================================================
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.ComponentModel.Composition.Hosting;
 using System.Configuration;
 using System.Diagnostics;
 using System.IO;
 using System.Reflection;
-using System.Windows.Forms;
+using System.Threading.Tasks;
 using System.Xml;
 using System.Xml.XPath;
 
+using Microsoft.Ddue.Tools.UI;
+
+using Sandcastle.Core;
 using Sandcastle.Core.BuildAssembler;
 using Sandcastle.Core.BuildAssembler.BuildComponent;
 
-using Microsoft.Ddue.Tools.UI;
-
-namespace Microsoft.Ddue.Tools
+namespace Microsoft.Ddue.Tools.BuildComponent
 {
     /// <summary>
     /// This build component is used to generate IntelliSense files based on the documented APIs.
@@ -59,9 +62,10 @@ namespace Microsoft.Ddue.Tools
     ///       Attributes:
     ///          Include Namespaces (false by default)
     ///          Namespaces filename ("Namespaces" if not specified or empty)
-    ///          Directory (current folder if not specified or empty) --&gt;
+    ///          Output folder (current folder if not specified or empty) --&gt;
+    ///          Bounded cache capacity (0 if not specified) --&gt;
     ///  &lt;output includeNamespaces="false" namespacesFile="Namespaces"
-    ///      folder="C:\ProjectDocs\" /&gt;
+    ///      folder="C:\ProjectDocs\" boundedCapacity="100" /&gt;
     /// &lt;/component&gt;
     /// </code>
     /// </example>
@@ -85,50 +89,130 @@ namespace Microsoft.Ddue.Tools
             /// </summary>
             public Factory()
             {
-                base.ReferenceBuildPlacement = new ComponentPlacement(PlacementAction.After,
+                this.ReferenceBuildPlacement = new ComponentPlacement(PlacementAction.After,
                     "Show Missing Documentation Component");
             }
 
             /// <inheritdoc />
             public override BuildComponentCore Create()
             {
-                return new IntelliSenseComponent(base.BuildAssembler);
+                return new IntelliSenseComponent(this.BuildAssembler);
             }
 
             /// <inheritdoc />
             public override string ConfigureComponent(string currentConfiguration, CompositionContainer container)
             {
-                using(IntelliSenseConfigDlg dlg = new IntelliSenseConfigDlg(currentConfiguration))
-                {
-                    if(dlg.ShowDialog() == DialogResult.OK)
-                        currentConfiguration = dlg.Configuration;
-                }
+                var dlg = new IntelliSenseConfigDlg(currentConfiguration);
+
+                if(dlg.ShowModalDialog() ?? false)
+                    currentConfiguration = dlg.Configuration;
 
                 return currentConfiguration;
             }
 
             /// <inheritdoc />
-            public override string DefaultConfiguration
-            {
-                get
-                {
-                    return @"<!-- Output options (optional)
+            public override string DefaultConfiguration =>
+@"<!-- Output options (optional)
   Attributes:
     Include namespaces (false by default)
     Namespaces comments filename (""Namespaces"" if not specified or empty)
-    Output folder (current folder if not specified or empty) -->
-<output includeNamespaces=""false"" namespacesFile=""Namespaces"" folder=""{@OutputFolder}"" />";
-                }
-            }
+    Output folder (current folder if not specified or empty)
+    Bounded cache capacity (0 if not specified)-->
+<output includeNamespaces=""false"" namespacesFile=""Namespaces"" folder=""{@OutputFolder}"" boundedCapacity=""100"" />";
 
             /// <inheritdoc />
             /// <remarks>Indicate a dependency on the missing documentation component as it will produce more
             /// complete documentation with all the proper elements present.</remarks>
-            public override IEnumerable<string> Dependencies
+            public override IEnumerable<string> Dependencies => new List<string> { "Show Missing Documentation Component" };
+        }
+        #endregion
+
+        #region Comments info
+        //=====================================================================
+
+        /// <summary>
+        /// This is used to contain the XML comments elements information that will be written to the
+        /// IntelliSense files.
+        /// </summary>
+        private class CommentsInfo
+        {
+            /// <summary>
+            /// The assembly name
+            /// </summary>
+            public string AssemblyName { get; set; }
+
+            /// <summary>
+            /// The member name
+            /// </summary>
+            public string MemberName { get; set; }
+
+            /// <summary>
+            /// The summary element comments
+            /// </summary>
+            public XPathNavigator Summary { get; set; }
+
+            /// <summary>
+            /// The parameter element comments
+            /// </summary>
+            public XPathNodeIterator Params { get; set; }
+
+            /// <summary>
+            /// The type parameter element comments
+            /// </summary>
+            public XPathNodeIterator TypeParams { get; set; }
+
+            /// <summary>
+            /// The returns element comments
+            /// </summary>
+            public XPathNavigator Returns { get; set; }
+
+            /// <summary>
+            /// The exception element comments
+            /// </summary>
+            public XPathNodeIterator Exceptions { get; set; }
+
+            /// <summary>
+            /// The code contracts element comments
+            /// </summary>
+            public XPathNodeIterator CodeContracts { get; set; }
+
+            /// <summary>
+            /// For enumerated types, the enum member element summary comments
+            /// </summary>
+            public IEnumerable<KeyValuePair<string, XPathNavigator>> EnumElements { get; set; }
+
+            /// <summary>
+            /// Constructor
+            /// </summary>
+            /// <param name="component">The component creating the instance</param>
+            /// <param name="assemblyName">The assembly name</param>
+            /// <param name="memberName">The member name</param>
+            /// <param name="comments">The XPath navigator from which to extract the comments information</param>
+            public CommentsInfo(IntelliSenseComponent component, string assemblyName, string memberName,
+              XPathNavigator comments)
             {
-                get
+                this.AssemblyName = assemblyName;
+                this.MemberName = memberName;
+                this.Summary = comments.SelectSingleNode(component.summaryExpression);
+                this.Params = comments.Select(component.paramExpression);
+                this.TypeParams = comments.Select(component.typeparamExpression);
+                this.Returns = comments.SelectSingleNode(component.returnsExpression);
+                this.Exceptions = comments.Select(component.exceptionExpression);
+                this.CodeContracts = comments.Select(component.codeContractsExpression);
+
+                if((string)comments.Evaluate(component.subgroupExpression) == "enumeration")
                 {
-                    return new List<string> { "Show Missing Documentation Component" };
+                    var enums = new List<KeyValuePair<string, XPathNavigator>>();
+                    this.EnumElements = enums;
+
+                    foreach(XPathNavigator nav in (XPathNodeIterator)comments.Evaluate(component.elementsExpression))
+                    {
+                        string enumName = nav.GetAttribute("api", String.Empty);
+                        var summaryComments = nav.SelectSingleNode(component.summaryExpression);
+
+                        if(!String.IsNullOrWhiteSpace(enumName) && summaryComments != null)
+                            enums.Add(new KeyValuePair<string, XPathNavigator>(enumName, summaryComments));
+                    }
                 }
             }
         }
@@ -145,7 +229,9 @@ namespace Microsoft.Ddue.Tools
         private XPathExpression summaryExpression, paramExpression, typeparamExpression, returnsExpression,
             exceptionExpression, codeContractsExpression;
 
-        private Dictionary<string, XmlWriter> writers;
+        private BlockingCollection<CommentsInfo> commentsList;
+        private Task commentsWriter;
+
         #endregion
 
         #region Constructor
@@ -157,6 +243,8 @@ namespace Microsoft.Ddue.Tools
         /// <param name="buildAssembler">A reference to the build assembler</param>
         protected IntelliSenseComponent(BuildAssemblerCore buildAssembler) : base(buildAssembler)
         {
+            // No bounded capacity by default
+            commentsList = new BlockingCollection<CommentsInfo>();
         }
         #endregion
 
@@ -168,19 +256,17 @@ namespace Microsoft.Ddue.Tools
         {
             XPathNavigator nav;
             string attrValue;
+            int boundedCapacity;
 
             Assembly asm = Assembly.GetExecutingAssembly();
             FileVersionInfo fvi = FileVersionInfo.GetVersionInfo(asm.Location);
 
-            base.WriteMessage(MessageLevel.Info, "[{0}, version {1}]\r\n    IntelliSense Component. " +
+            this.WriteMessage(MessageLevel.Info, "[{0}, version {1}]\r\n    IntelliSense Component. " +
                 "Copyright \xA9 2006-2015, Eric Woodruff, All Rights Reserved.\r\n" +
                 "    https://GitHub.com/EWSoftware/SHFB", fvi.ProductName, fvi.ProductVersion);
 
             outputFolder = String.Empty;
             namespacesFilename = "Namespaces";
-
-            // Assembly names are compared case insensitively
-            this.writers = new Dictionary<string, XmlWriter>(StringComparer.OrdinalIgnoreCase);
 
             assemblyExpression = XPathExpression.Compile("/document/reference/containers/library/@assembly");
             subgroupExpression = XPathExpression.Compile("string(/document/reference/apidata/@subgroup)");
@@ -218,7 +304,17 @@ namespace Microsoft.Ddue.Tools
 
                 if(!String.IsNullOrEmpty(attrValue))
                     namespacesFilename = attrValue;
+
+                // Allow limiting the writer task collection to conserve memory
+                attrValue = nav.GetAttribute("boundedCapacity", String.Empty);
+
+                if(!String.IsNullOrWhiteSpace(attrValue) && Int32.TryParse(attrValue, out boundedCapacity) &&
+                  boundedCapacity > 0)
+                    commentsList = new BlockingCollection<CommentsInfo>(boundedCapacity);
             }
+
+            // Use a pipeline task to allow the actual saving to occur while other topics are being generated
+            commentsWriter = Task.Run(() => WriteComments());
         }
 
         /// <inheritdoc />
@@ -227,33 +323,44 @@ namespace Microsoft.Ddue.Tools
             XPathNavigator navComments;
 
             // Don't bother if there is nothing to add
-            if(key[1] != ':' || ((key[0] == 'R' || key[0] == 'N') && !includeNamespaces))
+            if(key[1] != ':' || ((key[0] == 'G' || key[0] == 'N' || key[0] == 'R') && !includeNamespaces))
                 return;
 
             navComments = document.CreateNavigator().SelectSingleNode("/document/comments");
 
             // Project and namespace comments go in a separate file.  A member may appear in multiple assemblies
             // so write its comments out to each one.
-            if(key[0] == 'R' || key[0] == 'N')
-                this.WriteComments(key, namespacesFilename, navComments);
+            if(key[0] == 'G' || key[0] == 'N' || key[0] == 'R')
+                commentsList.Add(new CommentsInfo(this, namespacesFilename, key, navComments));
             else
                 foreach(XPathNavigator asmName in navComments.Select(assemblyExpression))
-                    this.WriteComments(key, asmName.Value, navComments);
+                    commentsList.Add(new CommentsInfo(this, asmName.Value, key, navComments));
         }
 
         /// <summary>
-        /// Write out closing tags and close all open XML writers when disposed.
+        /// Wait for the comments writer task to complete when disposed
         /// </summary>
         /// <param name="disposing">Pass true to dispose of the managed and unmanaged resources or false to just
         /// dispose of the unmanaged resources.</param>
         protected override void Dispose(bool disposing)
         {
             if(disposing)
-                foreach(XmlWriter writer in writers.Values)
+            {
+                commentsList.CompleteAdding();
+
+                if(commentsWriter != null)
                 {
-                    writer.WriteEndDocument();
-                    writer.Close();
+                    int count = commentsList.Count;
+
+                    if(count != 0)
+                        this.WriteMessage(MessageLevel.Diagnostic, "Waiting for the IntelliSense comments " +
+                            "writer task to finish ({0} member(s) remaining)...", count);
+
+                    commentsWriter.Wait();
                 }
+
+                commentsList.Dispose();
+            }
 
             base.Dispose(disposing);
         }
@@ -263,114 +370,103 @@ namespace Microsoft.Ddue.Tools
         //=====================================================================
 
         /// <summary>
-        /// Write the comments to the assembly's XML comments file
+        /// This is used to write the comments to the appropriate assembly XML comments file
         /// </summary>
-        /// <param name="key">The key (member name) of the item being documented.</param>
-        /// <param name="filename">The assembly filename</param>
-        /// <param name="navComments">The comments XPath navigator</param>
-        private void WriteComments(string key, string filename, XPathNavigator navComments)
+        private void WriteComments()
         {
+            CommentsInfo lastComments = null;
             XmlWriter writer;
-            XPathNavigator navTag;
-            XPathNodeIterator iterator;
             string fullPath;
 
-            if(String.IsNullOrEmpty(filename))
-                return;
+            // Assembly names are compared case insensitively
+            var writers = new Dictionary<string, XmlWriter>(StringComparer.OrdinalIgnoreCase);
 
             try
             {
-                if(!writers.TryGetValue(filename, out writer))
+                foreach(var comments in commentsList.GetConsumingEnumerable())
                 {
-                    fullPath = Path.Combine(outputFolder, filename + ".xml");
-                    XmlWriterSettings settings = new XmlWriterSettings();
-                    settings.Indent = true;
+                    lastComments = comments;
 
-                    try
+                    if(String.IsNullOrWhiteSpace(comments.AssemblyName))
+                        continue;
+
+                    if(!writers.TryGetValue(comments.AssemblyName, out writer))
                     {
-                        writer = XmlWriter.Create(fullPath, settings);
+                        fullPath = Path.Combine(outputFolder, comments.AssemblyName + ".xml");
+                        XmlWriterSettings settings = new XmlWriterSettings { Indent = true };
+
+                        try
+                        {
+                            writer = XmlWriter.Create(fullPath, settings);
+                        }
+                        catch(IOException ioEx)
+                        {
+                            this.WriteMessage(comments.MemberName, MessageLevel.Error, "An access error occurred " +
+                                "while attempting to create the IntelliSense output file '{0}'. The error message " +
+                                "is: {1}", fullPath, ioEx.Message);
+                        }
+
+                        writers.Add(comments.AssemblyName, writer);
+
+                        writer.WriteStartDocument();
+                        writer.WriteStartElement("doc");
+                        writer.WriteStartElement("assembly");
+                        writer.WriteElementString("name", comments.AssemblyName);
+                        writer.WriteEndElement();
+                        writer.WriteStartElement("members");
                     }
-                    catch(IOException ioEx)
-                    {
-                        base.WriteMessage(key, MessageLevel.Error, "An access error occurred while attempting " +
-                            "to create the IntelliSense output file '{0}'. The error message is: {1}", fullPath,
-                            ioEx.Message);
-                    }
 
-                    writers.Add(filename, writer);
+                    writer.WriteStartElement("member");
+                    writer.WriteAttributeString("name", comments.MemberName);
 
-                    writer.WriteStartDocument();
-                    writer.WriteStartElement("doc");
-                    writer.WriteStartElement("assembly");
-                    writer.WriteElementString("name", filename);
-                    writer.WriteEndElement();
-                    writer.WriteStartElement("members");
-                }
+                    if(comments.Summary != null)
+                        writer.WriteNode(comments.Summary, true);
 
-                writer.WriteStartElement("member");
-                writer.WriteAttributeString("name", key);
+                    foreach(XPathNavigator nav in comments.Params)
+                        writer.WriteNode(nav, true);
 
-                navTag = navComments.SelectSingleNode(summaryExpression);
+                    foreach(XPathNavigator nav in comments.TypeParams)
+                        writer.WriteNode(nav, true);
 
-                if(navTag != null)
-                    writer.WriteNode(navTag, true);
+                    if(comments.Returns != null)
+                        writer.WriteNode(comments.Returns, true);
 
-                iterator = navComments.Select(paramExpression);
+                    foreach(XPathNavigator nav in comments.Exceptions)
+                        writer.WriteNode(nav, true);
 
-                foreach(XPathNavigator nav in iterator)
-                    writer.WriteNode(nav, true);
+                    foreach(XPathNavigator nav in comments.CodeContracts)
+                        writer.WriteNode(nav, true);
 
-                iterator = navComments.Select(typeparamExpression);
+                    writer.WriteFullEndElement();
 
-                foreach(XPathNavigator nav in iterator)
-                    writer.WriteNode(nav, true);
-
-                navTag = navComments.SelectSingleNode(returnsExpression);
-
-                if(navTag != null)
-                    writer.WriteNode(navTag, true);
-
-                iterator = navComments.Select(exceptionExpression);
-
-                foreach(XPathNavigator nav in iterator)
-                    writer.WriteNode(nav, true);
-
-                iterator = navComments.Select(codeContractsExpression);
-
-                foreach(XPathNavigator nav in iterator)
-                    writer.WriteNode(nav, true);
-
-                writer.WriteFullEndElement();
-
-                // Write out enumeration members?
-                if((string)navComments.Evaluate(subgroupExpression) == "enumeration")
-                {
-                    iterator = (XPathNodeIterator)navComments.Evaluate(elementsExpression);
-
-                    foreach(XPathNavigator nav in iterator)
-                    {
-                        string attribute = nav.GetAttribute("api", String.Empty);
-                        writer.WriteStartElement("member");
-                        writer.WriteAttributeString("name", attribute);
-
-                        navTag = nav.SelectSingleNode(summaryExpression);
-
-                        if(navTag != null)
-                            writer.WriteNode(navTag, true);
-
-                        writer.WriteFullEndElement();
-                    }
+                    if(comments.EnumElements != null)
+                        foreach(var kv in comments.EnumElements)
+                        {
+                            writer.WriteStartElement("member");
+                            writer.WriteAttributeString("name", kv.Key);
+                            writer.WriteNode(kv.Value, true);
+                            writer.WriteFullEndElement();
+                        }
                 }
             }
             catch(IOException ioEx)
             {
-                base.WriteMessage(key, MessageLevel.Error, "An access error occurred while attempting to write " +
-                    "IntelliSense data. The error message is: {0}", ioEx.Message);
+                this.WriteMessage(lastComments.MemberName, MessageLevel.Error, "An access error occurred while " +
+                    "attempting to write IntelliSense data. The error message is: {0}", ioEx.Message);
             }
             catch(XmlException xmlEx)
             {
-                base.WriteMessage(key, MessageLevel.Error, "IntelliSense data was not valid XML. The error " +
-                    "message is: {0}", xmlEx.Message);
+                this.WriteMessage(lastComments.MemberName, MessageLevel.Error, "IntelliSense data was not valid " +
+                    "XML. The error message is: {0}", xmlEx.Message);
+            }
+            finally
+            {
+                // Write out closing tags and close all open XML writers when done
+                foreach(XmlWriter w in writers.Values)
+                {
+                    w.WriteEndDocument();
+                    w.Close();
+                }
             }
         }
         #endregion

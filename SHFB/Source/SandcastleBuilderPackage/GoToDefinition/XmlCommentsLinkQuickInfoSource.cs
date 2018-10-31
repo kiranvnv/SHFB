@@ -114,7 +114,7 @@ namespace SandcastleBuilder.Package.GoToDefinition
                             // in the "tag".
                             attrName = tagSpan.GetText();
 
-                            // If it contains "cref", tne next XML doc attribute value will be the target
+                            // If it contains "cref", ten next XML doc attribute value will be the target
                             if(attrName.IndexOf("cref=", StringComparison.Ordinal) != -1 && enableInCRef)
                                 attrName = "cref";
 
@@ -135,7 +135,9 @@ namespace SandcastleBuilder.Package.GoToDefinition
                                 var span = new SnapshotSpan(tagSpan.Snapshot, tagSpan.Start + 1,
                                     tagSpan.Length - 2);
 
+#pragma warning disable VSTHRD010
                                 content = this.CreateInfoText(attrName, span.GetText());
+#pragma warning restore VSTHRD010
 
                                 if(content != null)
                                 {
@@ -285,8 +287,10 @@ namespace SandcastleBuilder.Package.GoToDefinition
                     var projectFileSearcher = new ProjectFileSearcher(serviceProvider, null);
                     string title, filename, relativePath;
 
+#pragma warning disable VSTHRD010
                     bool found = projectFileSearcher.GetInfoFor(ProjectFileSearcher.IdType.Link, id,
                         out title, out filename, out relativePath);
+#pragma warning restore VSTHRD010
 
                     textBlock.Inlines.AddRange(new Inline[] {
                         new Bold(new Run("Title: ")),

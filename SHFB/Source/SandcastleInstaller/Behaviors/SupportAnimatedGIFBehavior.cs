@@ -21,6 +21,8 @@
 // 1.9.3.3  03/06/2012  EFW  Added the code to the project
 //=============================================================================
 
+// Ignore Spelling: Elad Malki
+
 using System;
 using System.ComponentModel;
 using System.Windows;
@@ -263,7 +265,7 @@ namespace Sandcastle.Installer.Behaviors
         }
 
         /// <summary>
-        /// Update the current image source to the relevenat frame.
+        /// Update the current image source to the relevant frame.
         /// </summary>
         /// <param name="dpo"></param>
         /// <param name="e"></param>

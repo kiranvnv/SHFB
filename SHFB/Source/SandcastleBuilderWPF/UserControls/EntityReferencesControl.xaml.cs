@@ -2,8 +2,8 @@
 // System  : Sandcastle Help File Builder WPF Controls
 // File    : EntityReferencesControl.cs
 // Author  : Eric Woodruff  (Eric@EWoodruff.us)
-// Updated : 05/23/2015
-// Note    : Copyright 2011-2015, Eric Woodruff, All rights reserved
+// Updated : 11/14/2017
+// Note    : Copyright 2011-2017, Eric Woodruff, All rights reserved
 // Compiler: Microsoft Visual C#
 //
 // This file contains the WPF user control used to look up code entity references, code snippets, tokens, images,
@@ -33,7 +33,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Xml.XPath;
 
-using Sandcastle.Core.Frameworks;
+using Sandcastle.Core.Reflection;
 
 using SandcastleBuilder.Utils;
 using SandcastleBuilder.Utils.ConceptualContent;
@@ -63,25 +63,6 @@ namespace SandcastleBuilder.WPF.UserControls
 
         #region Properties
         //=====================================================================
-
-        /// <summary>
-        /// This is used to enable or disable the animated GIF behavior
-        /// </summary>
-        /// <remarks>This is a hack to work around a problem when the control is hosted in a Windows
-        /// Forms application via a <c>HostElement</c>.  If set in the XAML, it causes an exception
-        /// related to the <c>CurrentFrameIndex</c> property already being registered.  By only enabling
-        /// it at runtime, it works around the problem.</remarks>
-        public bool AllowAnimatedGif
-        {
-            get
-            {
-                return Behaviors.SupportAnimatedGIFBehavior.GetSupportAnimatedGif(imgSpinner);
-            }
-            set
-            {
-                Behaviors.SupportAnimatedGIFBehavior.SetSupportAnimatedGif(imgSpinner, value);
-            }
-        }
 
         /// <summary>
         /// This is used to set or get the current project
@@ -579,15 +560,17 @@ namespace SandcastleBuilder.WPF.UserControls
             string lastSolution = null;
 
             // Index the framework comments based on the framework version in the project
-            FrameworkSettings frameworkSettings = FrameworkDictionary.AllFrameworks.GetFrameworkWithRedirect(
-                currentProject.FrameworkVersion);
+            var reflectionDataDictionary = new ReflectionDataSetDictionary(new[] { currentProject.ComponentPath,
+                    Path.GetDirectoryName(currentProject.Filename) });
+            var frameworkReflectionData = reflectionDataDictionary.CoreFrameworkByTitle(
+                currentProject.FrameworkVersion, true);
 
-            if(frameworkSettings == null)
+            if(frameworkReflectionData == null)
                 throw new InvalidOperationException(String.Format(CultureInfo.CurrentCulture,
                     "Unable to locate information for a framework version or its redirect: {0}",
                     currentProject.FrameworkVersion));
 
-            foreach(var location in frameworkSettings.CommentsFileLocations(currentProject.Language))
+            foreach(var location in frameworkReflectionData.CommentsFileLocations(currentProject.Language))
             {
                 indexTokenSource.Token.ThrowIfCancellationRequested();
 
@@ -659,7 +642,26 @@ namespace SandcastleBuilder.WPF.UserControls
 
             spIndexingPanel.Visibility = Visibility.Collapsed;
 
-            codeEntities = new List<string>(cache.AllKeys);
+            var allEntities = new HashSet<string>(cache.AllKeys);
+
+            // Add entries for all namespaces in the project namespace summaries
+            foreach(var ns in currentProject.NamespaceSummaries.Where(n => n.IsDocumented))
+            {
+                string name;
+
+                if(!ns.IsGroup)
+                    name = "N:" + ns.Name;
+                else
+                    name = "G:" + ns.Name.Replace(" (Group)", String.Empty);
+
+                if(!allEntities.Contains(name))
+                    allEntities.Add(name);
+            }
+
+            // Add an entry for the root namespace container
+            allEntities.Add("R:Project_" + currentProject.HtmlHelpName.Replace(" ", "_"));
+
+            codeEntities = new List<string>(allEntities);
 
             if(cboEntityType.SelectedIndex == (int)EntityType.CodeEntity)
             {
@@ -717,7 +719,7 @@ namespace SandcastleBuilder.WPF.UserControls
                 switch(r.EntityType)
                 {
                     case EntityType.File:
-                        // Not useable
+                        // Not usable
                         break;
 
                     case EntityType.Token:

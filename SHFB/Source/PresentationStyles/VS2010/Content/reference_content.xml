@@ -1,3 +1,4 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
 <content xml:space="preserve">
 
   <!-- note text -->
@@ -87,8 +88,6 @@
 	<item id="indexEntry_delegate">{0} delegate</item>
 	<item id="indexEntry_enumeration">{0} enumeration</item>
   <item id="indexEntry_enumerationMember">{0} enumeration member</item>
-  <item id="indexEntry_aboutType">{0}, about {0}</item>
-  <item id="indexEntry_derivedTypes">{0}, derived types</item>
   <item id="indexEntry_members">{0}, all members</item>
   <item id="indexEntry_methods">{0}, methods</item>
   <!-- index entry for operator list topic that has [operators + no type conversions] -->
@@ -200,10 +199,6 @@
   <item id="text_staticNotThreadSafe">Static members of this type are not safe for multi-threaded operations. </item>
   <item id="text_instanceThreadSafe">Instance members of this type are safe for multi-threaded operations. </item>
   <item id="text_instanceNotThreadSafe">Instance members of this type are not safe for multi-threaded operations. </item>
-  
-  <item id="text_NotesForImplementers">Notes to Implementers</item>
-  <item id="text_NotesForCallers">Notes to Callers</item>
-  <item id="text_NotesForInheritors">Notes to Inheritors</item>
   
   <!-- boilerplate intro to member list tables -->
   <item id="genericExposedMembersTableText">The {0} generic type exposes the following members.</item>
@@ -383,7 +378,7 @@
   <item id="text_contravariant">This type parameter is contravariant. That is, you can use either the type you specified or any type that is less derived. </item>
   <item id="text_variance">For more information about covariance and contravariance, see <a href="http://msdn.microsoft.com/en-us/library/ee207183.aspx" target="_blank">Covariance and Contravariance (C# and Visual Basic).</a>.</item>
 
-  <!-- Non Cls Compliant boilerplate text-->
+  <!-- Non-CLS Compliant boilerplate text-->
   <item id="boilerplate_NotClsCompliant">This API is not CLS-compliant.</item>
   <item id="boilerplate_AltClsCompliant">The CLS-compliant alternative is {0}.</item>
   
@@ -549,4 +544,8 @@
   <item id="SMCMissingTag"><p style="color: #dc143c; font-size: 8.5pt; font-weight: bold;">[Missing &lt;{0}&gt; documentation for "{1}"]</p></item>
   <item id="SMCMissingParamTag"><p style="color: #dc143c; font-size: 8.5pt; font-weight: bold;">[Missing &lt;{0} name="{1}"/&gt; documentation for "{2}"]</p></item>
   <item id="SMCMissingIncludeTarget"><p style="color: #dc143c; font-size: 8.5pt; font-weight: bold;">[Missing &lt;include&gt; target documentation in '{0}'.  File: '{1}' Path: '{2}']</p></item>
+	
+	<!-- View Source link text -->
+	<item id="sourceCodeLinkText">View Source</item>
+	<item id="sourceCodeLinkTitle">View the source code</item>
 </content>

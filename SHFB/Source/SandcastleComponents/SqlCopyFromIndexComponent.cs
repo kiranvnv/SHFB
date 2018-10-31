@@ -29,7 +29,7 @@ using System.Xml.XPath;
 using Sandcastle.Core.BuildAssembler;
 using Sandcastle.Core.BuildAssembler.BuildComponent;
 
-using Microsoft.Ddue.Tools;
+using Microsoft.Ddue.Tools.BuildComponent;
 using Microsoft.Ddue.Tools.Commands;
 
 using SandcastleBuilder.Components.Commands;
@@ -81,7 +81,7 @@ namespace SandcastleBuilder.Components
                 {
                     return @"<index name=""reflection"" value=""/reflection/apis/api"" key=""@id"" cache=""15""
 	localCacheSize=""2500"" cacheProject=""false"" connectionString="""">
-	<data base=""{@SHFBFolder}Data\{@TargetFrameworkIdentifier}"" recurse=""true"" files=""*.xml""
+	<data base=""{@FrameworkReflectionDataFolder}"" recurse=""true"" files=""*.xml""
 		duplicateWarning=""false"" groupId=""ReflectionIndexCache"">
 		{@ReferenceLinkNamespaceFiles}
 	</data>

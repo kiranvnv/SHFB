@@ -2,8 +2,8 @@
 // System  : Sandcastle Help File Builder Utilities
 // File    : SubstitutionTagReplacement.cs
 // Author  : Eric Woodruff  (Eric@EWoodruff.us)
-// Updated : 05/23/2015
-// Note    : Copyright 2015, Eric Woodruff, All rights reserved
+// Updated : 12/10/2017
+// Note    : Copyright 2015-2017, Eric Woodruff, All rights reserved
 // Compiler: Microsoft Visual C#
 //
 // This file contains the class used to handle substitution tag replacement in build template files
@@ -17,6 +17,8 @@
 // ==============================================================================================================
 // 05/10/2015  EFW  Refactored the substitution tag replacement code and moved it into its own class
 //===============================================================================================================
+
+// Ignore Spelling: concat Url img src onclick javascript
 
 using System;
 using System.Collections.Generic;
@@ -32,7 +34,6 @@ using System.Xml.XPath;
 using Microsoft.Build.Evaluation;
 
 using Sandcastle.Core;
-using Sandcastle.Core.Frameworks;
 using Sandcastle.Core.PresentationStyle;
 
 using SandcastleBuilder.Utils.Design;
@@ -367,6 +368,26 @@ namespace SandcastleBuilder.Utils.BuildEngine
         }
 
         /// <summary>
+        /// The current project's source code base path
+        /// </summary>
+        /// <returns>The current project's source code base path</returns>
+        [SubstitutionTag]
+        private string SourceCodeBasePath()
+        {
+            return currentBuild.CurrentProject.SourceCodeBasePath;
+        }
+
+        /// <summary>
+        /// The missing source context warning setting
+        /// </summary>
+        /// <returns>The current project's missing source context warning setting</returns>
+        [SubstitutionTag]
+        private string WarnOnMissingSourceContext()
+        {
+            return currentBuild.CurrentProject.WarnOnMissingSourceContext.ToString().ToLowerInvariant();
+        }
+
+        /// <summary>
         /// The HTML Help 1 compiler path
         /// </summary>
         /// <returns>The HTML Help 1 compiler path</returns>
@@ -566,27 +587,42 @@ namespace SandcastleBuilder.Utils.BuildEngine
         [SubstitutionTag]
         private string TargetFrameworkIdentifier()
         {
-            return currentBuild.FrameworkSettings.Platform;
+            return currentBuild.FrameworkReflectionData.Platform;
         }
 
         /// <summary>
-        /// The full framework version
+        /// The full framework version (Major.Minor[.Build[.Revision]]
         /// </summary>
         /// <returns>The full framework version</returns>
         [SubstitutionTag]
         private string FrameworkVersion()
         {
-            return currentBuild.FrameworkSettings.Version.ToString();
+            return currentBuild.FrameworkReflectionData.Version.ToString();
         }
 
         /// <summary>
-        /// The short framework version (Major.Minor)
+        /// The short framework version (Major.Minor[.Build])
         /// </summary>
-        /// <returns>The short framework version</returns>
+        /// <returns>Typically returns a two digit version number.  However, if the build number is between 1 and
+        /// 10, it will be included as well (i.e. v4.5.2, v4.6.1).</returns>
         [SubstitutionTag]
         private string FrameworkVersionShort()
         {
-            return currentBuild.FrameworkSettings.Version.ToString(2);
+            Version v = currentBuild.FrameworkReflectionData.Version;
+
+            if(v.Build > 0 && v.Build < 10)
+                return currentBuild.FrameworkReflectionData.Version.ToString(3);
+
+            return v.ToString(2);
+        }
+
+        /// <summary>
+        /// The framework reflection data folder
+        /// </summary>
+        [SubstitutionTag]
+        private string FrameworkReflectionDataFolder()
+        {
+            return currentBuild.FrameworkReflectionDataFolder;
         }
         #endregion
 
@@ -603,6 +639,16 @@ namespace SandcastleBuilder.Utils.BuildEngine
             return (sandcastleProject.BuildAssemblerVerbosity == Utils.BuildAssemblerVerbosity.AllMessages) ? "Info" :
                 (sandcastleProject.BuildAssemblerVerbosity == Utils.BuildAssemblerVerbosity.OnlyWarningsAndErrors) ?
                 "Warn" : "Error";
+        }
+
+        /// <summary>
+        /// Build assembler Save Component writer task cache capacity
+        /// </summary>
+        /// <returns>The cache capacity for the Save Component's writer task</returns>
+        [SubstitutionTag]
+        private string SaveComponentCacheCapacity()
+        {
+            return sandcastleProject.SaveComponentCacheCapacity.ToString(CultureInfo.InvariantCulture);
         }
         #endregion
 
@@ -1026,6 +1072,21 @@ namespace SandcastleBuilder.Utils.BuildEngine
         {
             return WebUtility.HtmlEncode(sandcastleProject.TocParentVersion);
         }
+
+        /// <summary>
+        /// The search results display version
+        /// </summary>
+        /// <returns>The display version to show in the help viewer search results pane</returns>
+        [SubstitutionTag]
+        private string SearchResultsDisplayVersion()
+        {
+            string displayVersion = this.TransformText(sandcastleProject.SearchResultsDisplayVersion);
+
+            if(String.IsNullOrWhiteSpace(displayVersion))
+                return String.Empty;
+
+            return $"<meta name=\"Microsoft.Help.DisplayVersion\" content=\"{displayVersion}\" />";
+        }
         #endregion
 
         #region Website substitution tags
@@ -1061,6 +1122,48 @@ namespace SandcastleBuilder.Utils.BuildEngine
             this.AppendTocEntry(entries, replacementValue);
 
             return replacementValue.ToString();
+        }
+
+        /// <summary>
+        /// The website ad content that should appear in on each page
+        /// </summary>
+        /// <returns>The website ad content</returns>
+        [SubstitutionTag]
+        private string WebsiteAdContent()
+        {
+            // Escape braces so that they aren't interpreted as shared content item parameters.  However, we must
+            // replace any other substitution tags before doing that.
+            return this.TransformText(sandcastleProject.WebsiteAdContent).Replace("{", "{{").Replace("}", "}}");
+        }
+        #endregion
+
+        #region Markdown substitution tags
+        //=====================================================================
+
+        /// <summary>
+        /// The markdown API URL format
+        /// </summary>
+        /// <returns>The markdown API URL format</returns>
+        [SubstitutionTag]
+        private string MarkdownApiUrlFormat()
+        {
+            if(sandcastleProject.AppendMarkdownFileExtensionsToUrls)
+                return "{0}.md";
+
+            return "{0}";
+        }
+
+        /// <summary>
+        /// The markdown conceptual URL selector
+        /// </summary>
+        /// <returns>The markdown API URL selector</returns>
+        [SubstitutionTag]
+        private string MarkdownConceptualUrlSelector()
+        {
+            if(sandcastleProject.AppendMarkdownFileExtensionsToUrls)
+                return "concat(/metadata/topic/@id,'.md')";
+
+            return "string(/metadata/topic/@id)";
         }
         #endregion
 
@@ -1334,26 +1437,24 @@ namespace SandcastleBuilder.Utils.BuildEngine
         /// <returns>The list of framework comments file sources in the appropriate format</returns>
         private string FrameworkCommentList(bool forImport)
         {
-            FrameworkSettings settings = FrameworkDictionary.AllFrameworks.GetFrameworkWithRedirect(
-                sandcastleProject.FrameworkVersion);
+            var dataSet = currentBuild.FrameworkReflectionData;
             string folder, wildcard;
 
             replacementValue.Clear();
 
             // Build the list based on the type and what actually exists
-            foreach(var location in settings.CommentsFileLocations(sandcastleProject.Language))
+            foreach(var location in dataSet.CommentsFileLocations(sandcastleProject.Language))
             {
                 folder = Path.GetDirectoryName(location);
                 wildcard = Path.GetFileName(location);
 
                 if(!forImport)
                 {
-                    // Files are cached by platform, version, and location.  The groupId attribute can be
-                    // used by caching components to identify the cache and its location.
+                    // Files are cached by platform, version, and location.  The groupId attribute can be used by
+                    // caching components to identify the cache and its location.
                     replacementValue.AppendFormat(CultureInfo.InvariantCulture, "<data base=\"{0}\" files=\"{1}\" " +
                         "recurse=\"false\" duplicateWarning=\"false\" groupId=\"{2}_{3}_{4:X}\" />\r\n",
-                        folder, wildcard, settings.Platform, settings.Version,
-                        location.GetHashCode());
+                        folder, wildcard, dataSet.Platform, dataSet.Version, location.GetHashCode());
                 }
                 else
                     replacementValue.AppendFormat(CultureInfo.InvariantCulture, "<import path=\"{0}\" file=\"{1}\" " +

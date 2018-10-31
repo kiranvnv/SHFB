@@ -2,26 +2,27 @@
 // System  : Sandcastle Guided Installation - Sandcastle Help File Builder
 // File    : SandcastleHelpFileBuilderPage.cs
 // Author  : Eric Woodruff
-// Updated : 12/28/2013
+// Updated : 12/26/2016
 // Compiler: Microsoft Visual C#
 //
 // This file contains a page used to help the user install the Sandcastle Help File Builder
 //
 // This code is published under the Microsoft Public License (Ms-PL).  A copy of the license should be
-// distributed with the code.  It can also be found at the project website: https://GitHub.com/EWSoftware/SHFB.  This
+// distributed with the code and can be found at the project website: https://GitHub.com/EWSoftware/SHFB.  This
 // notice and all copyright notices must remain intact in all applications, documentation, and source files.
 //
-// Version     Date     Who  Comments
+//    Date     Who  Comments
 // ==============================================================================================================
-// 1.0.0.0  02/12/2011  EFW  Created the code
-// 1.1.0.0  04/14/2012  EFW  Converted to use WPF
-// 1.1.0.1  10/06/2012  EFW  Merged SHFB installer pages into the main project
+// 02/12/2011  EFW  Created the code
+// 04/14/2012  EFW  Converted to use WPF
+// 10/06/2012  EFW  Merged SHFB installer pages into the main project
 //===============================================================================================================
 
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Documents;
 using System.Windows.Input;
@@ -97,15 +98,6 @@ namespace Sandcastle.Installer.InstallerPages
             {
                 if(!String.IsNullOrEmpty(shfbFolder))
                 {
-                    yield return new CompletionAction
-                    {
-                        Description = "Open the Sandcastle Tools help file",
-                        Action = new Action(() =>
-                        {
-                            Utility.Open(Path.Combine(shfbFolder, @"Help\SandcastleTools.chm"));
-                        })
-                    };
-
                     yield return new CompletionAction
                     {
                         Description = "Open the Sandcastle Help File Builder help file",
@@ -191,8 +183,7 @@ namespace Sandcastle.Installer.InstallerPages
                 if(!String.IsNullOrEmpty(shfbFolder))
                 {
                     // If there is an installed version, make sure it is older than what we expect
-                    if(!Directory.Exists(shfbFolder) || !File.Exists(Path.Combine(shfbFolder,
-                      "SHFBProjectLauncher.exe")))
+                    if(!Directory.Exists(shfbFolder) || !File.Exists(Path.Combine(shfbFolder, "SHFBProjectLauncher.exe")))
                         installedVersion = new Version(0, 0, 0, 0);
                     else
                     {
@@ -297,27 +288,44 @@ namespace Sandcastle.Installer.InstallerPages
         /// </summary>
         /// <param name="sender">The sender of the event</param>
         /// <param name="e">The event arguments</param>
-        private void btnInstallSHFB_Click(object sender, EventArgs e)
+        private async void btnInstallSHFB_Click(object sender, EventArgs e)
         {
+            bool success = false;
+
             searchPerformed = suggestReboot = false;
             btnInstallSHFB.IsEnabled = false;
+            imgSpinner.Visibility = lblPleaseWait.Visibility = Visibility.Visible;
 
-            bool launched = Utility.RunInstaller(Path.Combine(Utility.InstallResourcesPath, installerName), null,
-                (exitCode) =>
+            try
+            {
+                await Task.Run(() =>
                 {
-                    suggestReboot = true;
-                    imgSpinner.Visibility = lblPleaseWait.Visibility = Visibility.Collapsed;
-                    this.ShowPage();
-                },
-                (ex) =>
-                {
-                    imgSpinner.Visibility = lblPleaseWait.Visibility = Visibility.Collapsed;
-                    MessageBox.Show("Unable to execute installer: " + ex.Message, this.PageTitle,
-                        MessageBoxButton.OK, MessageBoxImage.Error);
+                    Utility.RunInstaller(Path.Combine(Utility.InstallResourcesPath, installerName), null);
                 });
 
-            if(launched)
-                imgSpinner.Visibility = lblPleaseWait.Visibility = Visibility.Visible;
+                success = true;
+            }
+            catch(InvalidOperationException ex)
+            {
+                MessageBox.Show(ex.Message, this.PageTitle, MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            catch(Exception ex)
+            {
+                MessageBox.Show("Unable to execute installer: " + ex.Message, this.PageTitle,
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            finally
+            {
+                imgSpinner.Visibility = lblPleaseWait.Visibility = Visibility.Collapsed;
+
+                if(success)
+                {
+                    suggestReboot = true;
+                    this.ShowPage();
+                }
+                else
+                    btnInstallSHFB.IsEnabled = true;
+            }
         }
         #endregion
     }

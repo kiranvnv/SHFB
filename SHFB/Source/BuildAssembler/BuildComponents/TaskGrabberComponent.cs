@@ -19,7 +19,7 @@ using Sandcastle.Core.BuildAssembler.BuildComponent;
 
 // still have problems with spaces
 
-namespace Microsoft.Ddue.Tools
+namespace Microsoft.Ddue.Tools.BuildComponent
 {
     /// <summary>
     /// Task grabber component
@@ -291,7 +291,7 @@ namespace Microsoft.Ddue.Tools
                         continue;
                     string key = keyNode.Value;
 
-                    // log multiple occurences of a single id
+                    // log multiple occurrences of a single id
                     if(index.ContainsKey(key))
                     {
                         WriteMessage(MessageLevel.Warn, "Entries for the key '{0}' occur in both '{1}' and '{2}'. The first entry will be used.", key, index[key], file);

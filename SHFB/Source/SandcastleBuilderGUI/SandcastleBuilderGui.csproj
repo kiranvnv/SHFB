@@ -60,14 +60,24 @@
     <DocumentationFile>..\..\Deploy\SandcastleBuilderGUI.xml</DocumentationFile>
     <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
+  <PropertyGroup>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
   <ItemGroup>
     <Reference Include="ICSharpCode.TextEditor, Version=3.2.1.6466, Culture=neutral, PublicKeyToken=4d61825e8dd49f1a, processorArchitecture=MSIL">
       <HintPath>..\packages\ICSharpCode.TextEditor.3.2.1.6466\lib\Net20\ICSharpCode.TextEditor.dll</HintPath>
     </Reference>
-    <Reference Include="Microsoft.Build" />
-    <Reference Include="NHunspell, Version=1.2.5359.26126, Culture=neutral, PublicKeyToken=1ac793ea843b4366, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\packages\NHunspell.1.2.5359.26126\lib\net\NHunspell.dll</HintPath>
+    <Reference Include="Microsoft.Build, Version=14.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
+      <HintPath>..\packages\Microsoft.Build.14.3.0\lib\net45\Microsoft.Build.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Microsoft.Build.Framework, Version=14.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
+      <HintPath>..\packages\Microsoft.Build.Framework.14.3.0\lib\net45\Microsoft.Build.Framework.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="NHunspell, Version=1.2.5554.16953, Culture=neutral, PublicKeyToken=1ac793ea843b4366, processorArchitecture=MSIL">
+      <HintPath>..\packages\NHunspell.1.2.5554.16953\lib\net\NHunspell.dll</HintPath>
+      <Private>True</Private>
     </Reference>
     <Reference Include="PresentationCore" />
     <Reference Include="PresentationFramework" />
@@ -95,14 +105,6 @@
     <Reference Include="WindowsFormsIntegration" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="..\SandcastleBuilderPackage\PropertyPages\BuildEventEditorForm.cs">
-      <Link>PropertyPages\BuildEventEditorForm.cs</Link>
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="..\SandcastleBuilderPackage\PropertyPages\BuildEventEditorForm.designer.cs">
-      <Link>PropertyPages\BuildEventEditorForm.designer.cs</Link>
-      <DependentUpon>BuildEventEditorForm.cs</DependentUpon>
-    </Compile>
     <Compile Include="..\SandcastleBuilderPackage\PropertyPages\BuildEventPropertiesPageControl.cs">
       <Link>PropertyPages\BuildEventPropertiesPageControl.cs</Link>
       <SubType>UserControl</SubType>
@@ -213,10 +215,15 @@
     <Compile Include="AboutDlg.cs">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="AboutDlg.Designer.cs">
+      <DependentUpon>AboutDlg.cs</DependentUpon>
+    </Compile>
     <Compile Include="BeforeBuildAction.cs" />
     <Compile Include="ContentEditors\BaseContentEditor.cs">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="ContentEditors\ContentFileEditor.cs" />
+    <Compile Include="ContentEditors\ContentFileEditorCollection.cs" />
     <Compile Include="ContentEditors\EntityReferenceWindow.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -245,6 +252,9 @@
     </Compile>
     <Compile Include="ContentEditors\GotoLineDlg.Designer.cs">
       <DependentUpon>GotoLineDlg.cs</DependentUpon>
+    </Compile>
+    <Compile Include="ContentEditors\ScrollablePanel.cs">
+      <SubType>Component</SubType>
     </Compile>
     <Compile Include="ContentEditors\NodeData.cs" />
     <Compile Include="ContentEditors\NodeIcon.cs" />
@@ -314,6 +324,8 @@
     <Compile Include="ContentEditors\TopicEditorWindow.Designer.cs">
       <DependentUpon>TopicEditorWindow.cs</DependentUpon>
     </Compile>
+    <Compile Include="Gac\GacApi.cs" />
+    <Compile Include="Gac\GacEnumerator.cs" />
     <Compile Include="GlobalSuppressions.cs" />
     <Compile Include="MainForm.cs">
       <SubType>Form</SubType>
@@ -344,10 +356,6 @@
     <Compile Include="Spelling\TextLocation.cs" />
     <Compile Include="StartUp.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <EmbeddedResource Include="..\SandcastleBuilderPackage\PropertyPages\BuildEventEditorForm.resx">
-      <Link>PropertyPages\BuildEventEditorForm.resx</Link>
-      <DependentUpon>BuildEventEditorForm.cs</DependentUpon>
-    </EmbeddedResource>
     <EmbeddedResource Include="..\SandcastleBuilderPackage\PropertyPages\BuildEventPropertiesPageControl.resx">
       <Link>PropertyPages\BuildEventPropertiesPageControl.resx</Link>
       <DependentUpon>BuildEventPropertiesPageControl.cs</DependentUpon>
@@ -404,6 +412,9 @@
     <EmbeddedResource Include="AboutDlg.resx">
       <DependentUpon>AboutDlg.cs</DependentUpon>
       <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <EmbeddedResource Include="ContentEditors\BaseContentEditor.resx">
+      <DependentUpon>BaseContentEditor.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="ContentEditors\EntityReferenceWindow.resx">
       <DependentUpon>EntityReferenceWindow.cs</DependentUpon>
@@ -484,6 +495,8 @@
       <DependentUpon>Resources.resx</DependentUpon>
       <DesignTime>True</DesignTime>
     </Compile>
+    <None Include="app.manifest" />
+    <None Include="Images\HtmlEncode.png" />
     <Content Include="Hunspellx64.dll">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
@@ -494,6 +507,7 @@
     <Content Include="ItemTemplates\XAML Syntax.xamlcfg">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+    <None Include="ItemTemplates\ItemTemplates.vsspell" />
     <None Include="Resources\SpellCheck.png" />
     <None Include="Resources\Spinner.gif" />
     <Content Include="Spelling\en_US.aff">
@@ -512,6 +526,9 @@
       <DependentUpon>Settings.settings</DependentUpon>
       <DesignTimeSharedInput>True</DesignTimeSharedInput>
     </Compile>
+    <Compile Include="StatusBarTextProvider.cs">
+      <SubType>Component</SubType>
+    </Compile>
     <Compile Include="UnsafeNativeMethods.cs" />
     <Compile Include="UserPreferencesDlg.cs">
       <SubType>Form</SubType>
@@ -529,9 +546,9 @@
       <Project>{330DADF7-3AB1-49A0-B3C6-A69D2C4F06A6}</Project>
       <Name>SandcastleBuilderUtils</Name>
     </ProjectReference>
-    <ProjectReference Include="..\SandcastleBuilderWPF\SandcastleBuilderWPF.csproj">
-      <Project>{D3B06405-3435-4329-9233-2DF1BF5028AA}</Project>
-      <Name>SandcastleBuilderWPF</Name>
+    <ProjectReference Include="..\SandcastleBuilderWPF\SandcastleBuilderWPF_GUI.csproj">
+      <Project>{d3b06405-3435-4329-9233-2df1bf5028aa}</Project>
+      <Name>SandcastleBuilderWPF_GUI</Name>
     </ProjectReference>
     <ProjectReference Include="..\SandcastleCore\Sandcastle.Core.csproj">
       <Project>{399E78F8-4954-409E-991A-37DA9D0579CC}</Project>
@@ -576,10 +593,8 @@
     <None Include="Images\Underline.bmp" />
     <None Include="Images\Redo.png" />
     <None Include="Images\Undo.png" />
-    <None Include="Images\HtmlEncode.bmp" />
     <None Include="Images\TokenFile.ico" />
     <None Include="Images\ResourceItemFile.ico" />
-    <None Include="Images\SpinningWheel.gif" />
     <Content Include="ItemTemplates\Site Map.sitemap">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
@@ -604,7 +619,6 @@
     <None Include="Images\Html.bmp" />
     <None Include="Images\SiteMap.png" />
     <None Include="Images\Xml.bmp" />
-    <None Include="Images\Xsl.bmp" />
     <None Include="Images\DocSource.png" />
     <None Include="Images\DocSourcesFolder.bmp" />
     <None Include="Images\Document.bmp" />

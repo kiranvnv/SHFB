@@ -2,8 +2,8 @@
 // System  : Sandcastle Help File Builder MSBuild Tasks
 // File    : MSBuildProject.cs
 // Author  : Eric Woodruff  (Eric@EWoodruff.us)
-// Updated : 02/20/2015
-// Note    : Copyright 2008-2015, Eric Woodruff, All rights reserved
+// Updated : 05/07/2017
+// Note    : Copyright 2008-2017, Eric Woodruff, All rights reserved
 // Compiler: Microsoft Visual C#
 //
 // This file contains an MSBuild project wrapper used by the Sandcastle Help File builder during the build
@@ -14,18 +14,19 @@
 // notice, the author's name, and all copyright notices must remain intact in all applications, documentation,
 // and source files.
 //
-// Version     Date     Who  Comments
+//    Date     Who  Comments
+// ==============================================================================================================
+// 07/11/2008  EFW  Created the code
+// 07/09/2010  EFW  Updated for use with .NET 4.0 and MSBuild 4.0.
+// 08/20/2011  EFW  Updated to support Portable .NET Framework
+// 09/08/2012  EFW  Updated to support Windows Store App projects
+// 10/22/2012  EFW  Updated to support the .winmd output type
 //===============================================================================================================
-// 1.8.0.0  07/11/2008  EFW  Created the code
-// 1.9.1.0  07/09/2010  EFW  Updated for use with .NET 4.0 and MSBuild 4.0.
-// 1.9.3.2  08/20/2011  EFW  Updated to support Portable .NET Framework
-// 1.9.5.0  09/08/2012  EFW  Updated to support Windows Store App projects
-// 1.9.6.0  10/22/2012  EFW  Updated to support the .winmd output type
-//===============================================================================================================
+
+// Ignore Spelling: Exe winmdobj dll
 
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -33,7 +34,7 @@ using System.Text.RegularExpressions;
 using Microsoft.Build.Evaluation;
 using Microsoft.Build.Exceptions;
 
-using Sandcastle.Core.Frameworks;
+using Sandcastle.Core.Reflection;
 
 namespace SandcastleBuilder.Utils.MSBuild
 {
@@ -68,6 +69,7 @@ namespace SandcastleBuilder.Utils.MSBuild
 
         private static Regex reInvalidAttribute = new Regex(
             "The attribute \"(.*?)\" in element \\<(.*?)\\> is unrecognized", RegexOptions.IgnoreCase);
+
         #endregion
 
         #region Properties
@@ -159,7 +161,9 @@ namespace SandcastleBuilder.Utils.MSBuild
                         if(String.Compare(outputType, "Exe", StringComparison.OrdinalIgnoreCase) == 0 ||
                           String.Compare(outputType, "WinExe", StringComparison.OrdinalIgnoreCase) == 0 ||
                           String.Compare(outputType, "AppContainerExe", StringComparison.OrdinalIgnoreCase) == 0)
+                        {
                             assemblyName += ".exe";
+                        }
                         else
                             if(String.Compare(outputType, "winmdobj", StringComparison.OrdinalIgnoreCase) == 0)
                                 assemblyName += ".winmd";
@@ -172,6 +176,25 @@ namespace SandcastleBuilder.Utils.MSBuild
                         else
                             assemblyName = Path.Combine(Path.Combine(Path.GetDirectoryName(
                                 msBuildProject.FullPath), outputPath), assemblyName);
+
+                    // .NETCoreApp projects don't seem to return the correct output type
+                    if(!File.Exists(assemblyName) && this.TargetFrameworkIdentifier == PlatformType.DotNetCoreApp)
+                        assemblyName = Path.ChangeExtension(assemblyName, "dll");
+
+                    // If the TargetFrameworks property is used, the assembly is most likely in a subfolder
+                    // under the output folder based on one of the target frameworks specified.
+                    if(!File.Exists(assemblyName) && properties.TryGetValue("TargetFrameworks", out prop))
+                    {
+                        outputPath = Path.GetDirectoryName(assemblyName);
+
+                        foreach(string subfolder in prop.EvaluatedValue.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries))
+                            if(Directory.EnumerateFiles(Path.Combine(outputPath, subfolder),
+                              Path.GetFileName(assemblyName)).Any())
+                            {
+                                assemblyName = Path.Combine(outputPath, subfolder, Path.GetFileName(assemblyName));
+                                break;
+                            }
+                    }
                 }
 
                 return assemblyName;
@@ -326,7 +349,13 @@ namespace SandcastleBuilder.Utils.MSBuild
                 }
 
                 if(versionValue == null)
+                {
+                    // If not found but TargetFrameworks is specified, just assume some version of .NETFramework
+                    if(properties.TryGetValue("TargetFrameworks", out prop))
+                        return "4.5.2";
+
                     throw new InvalidOperationException("Unable to determine target framework version for project");
+                }
 
                 if(versionValue[0] == 'v')
                     versionValue = versionValue.Substring(1);
@@ -368,20 +397,17 @@ namespace SandcastleBuilder.Utils.MSBuild
                 projectFile = Path.GetFullPath(projectFile);
 
             if(!File.Exists(projectFile))
-                throw new BuilderException("BE0051", "The specified project " +
-                    "file does not exist: " + projectFile);
+                throw new BuilderException("BE0051", "The specified project file does not exist: " + projectFile);
 
             if(Path.GetExtension(projectFile).ToUpperInvariant() == ".VCPROJ")
-                throw new BuilderException("BE0068", "Incompatible Visual " +
-                    "Studio project file format.  See error code help topic " +
-                    "for more information.\r\nC++ project files prior to Visual " +
+                throw new BuilderException("BE0068", "Incompatible Visual Studio project file format.  See " +
+                    "the error code help topic for more information.\r\nC++ project files prior to Visual " +
                     "Studio 2010 are not currently supported.");
 
             try
             {
                 // If the project is already loaded, we'll use it as-is
-                msBuildProject = ProjectCollection.GlobalProjectCollection.GetLoadedProjects(
-                    projectFile).FirstOrDefault();
+                msBuildProject = ProjectCollection.GlobalProjectCollection.GetLoadedProjects(projectFile).FirstOrDefault();
 
                 if(msBuildProject == null)
                 {
@@ -394,11 +420,13 @@ namespace SandcastleBuilder.Utils.MSBuild
             {
                 // Future MSBuild projects may not be loadable.  Their targets must be added as individual
                 // documentation sources and reference items.
-                if(reInvalidAttribute.IsMatch(ex.Message))
-                    throw new BuilderException("BE0068", "Incompatible Visual Studio project " +
-                        "file format.  See error code help topic for more information.\r\nThis " +
-                        "project may be for a newer version of MSBuild and cannot be loaded.  " +
-                        "Error message:", ex);
+                if(reInvalidAttribute.IsMatch(ex.Message) || ex.Message.StartsWith("The default XML namespace " +
+                  "of the project", StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new BuilderException("BE0068", "Incompatible Visual Studio project file format.  " +
+                        "See the error code help topic for more information.\r\nThis project may be for a " +
+                        "newer version of MSBuild and cannot be loaded.  Error message:", ex);
+                }
 
                 throw;
             }
@@ -533,26 +561,25 @@ namespace SandcastleBuilder.Utils.MSBuild
         }
 
         /// <summary>
-        /// Clone the project's reference information and add it to the
-        /// given dictionary.
+        /// Clone the project's reference information and add it to the given dictionary
         /// </summary>
-        /// <param name="references">The dictionary used to contain the
-        /// cloned reference information</param>
-        internal void CloneReferenceInfo(Dictionary<string, Tuple<string, string,
-          List<KeyValuePair<string, string>>>> references)
+        /// <param name="resolver">The package reference resolver to use</param>
+        /// <param name="references">The dictionary used to contain the cloned reference information</param>
+        internal void CloneReferenceInfo(PackageReferenceResolver resolver, Dictionary<string,
+          Tuple<string, string, List<KeyValuePair<string, string>>>> references)
         {
             string rootPath, path;
 
             rootPath = Path.GetDirectoryName(msBuildProject.FullPath);
 
-            // Nested project references are ignored.  We'll assume that they exist in the
-            // folder with the target and they'll be found automatically.  
+            // Nested project references are ignored.  We'll assume that they exist in the folder with the target
+            // and they'll be found automatically.  
             foreach(string refType in (new string[] { "Reference", "COMReference" }))
                 foreach(ProjectItem reference in msBuildProject.GetItems(refType))
                     if(!references.ContainsKey(reference.EvaluatedInclude))
                     {
-                        var metadata = reference.Metadata.Select(m => new KeyValuePair<string, string>(
-                            m.Name, m.EvaluatedValue)).ToList();
+                        var metadata = reference.Metadata.Select(m => new KeyValuePair<string, string>(m.Name,
+                            m.EvaluatedValue)).ToList();
                         var hintPath = metadata.FirstOrDefault(m => m.Key == "HintPath");
 
                         // Convert relative paths to absolute paths
@@ -571,6 +598,21 @@ namespace SandcastleBuilder.Utils.MSBuild
                         references.Add(reference.EvaluatedInclude, Tuple.Create(reference.ItemType,
                             reference.EvaluatedInclude, metadata));
                     }
+
+            // Resolve any package references by converting them to regular references
+            if(resolver.LoadPackageReferenceInfo(msBuildProject))
+                foreach(string pr in resolver.ReferenceAssemblies)
+                {
+                    string refName = Path.GetFileNameWithoutExtension(pr);
+
+                    if(!references.ContainsKey(refName) && File.Exists(pr))
+                        references.Add(refName, Tuple.Create("Reference", refName,
+                            new List<KeyValuePair<string, string>>
+                            {
+                                new KeyValuePair<string, string>("HintPath", pr),
+                                new KeyValuePair<string, string>("FromPackageReference", "true")
+                            }));
+                }
         }
         #endregion
     }

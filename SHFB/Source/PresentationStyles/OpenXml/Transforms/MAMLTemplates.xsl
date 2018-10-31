@@ -947,6 +947,9 @@
 			<xsl:when test="$v_keyword='abstract' or $v_keyword='MustInherit'">
 				<include item="devlang_abstractKeyword"/>
 			</xsl:when>
+			<xsl:when test="$v_keyword='sealed' or $v_keyword='NotInheritable'">
+				<include item="devlang_sealedKeyword"/>
+			</xsl:when>
 			<xsl:otherwise>
 				<w:r>
 					<w:rPr>
@@ -1084,6 +1087,12 @@
 				<xsl:apply-templates />
 			</span>
 		</xsl:if>
+	</xsl:template>
+
+	<xsl:template match="ddue:lineBreak" name="t_ddue_lineBreak">
+		<w:r>
+			<w:br />
+		</w:r>
 	</xsl:template>
 
 	<xsl:template match="ddue:literal" name="t_ddue_literal">
@@ -1296,9 +1305,15 @@
 					<xsl:value-of select="@autoUpgrade"/>
 				</xsl:attribute>
 			</xsl:if>
-			<xsl:if test="normalize-space(@linkText)">
-				<xsl:value-of select="normalize-space(@linkText)"/>
-			</xsl:if>
+			<xsl:choose>
+				<xsl:when test="normalize-space(@linkText)">
+					<xsl:value-of select="normalize-space(@linkText)"/>
+				</xsl:when>
+				<xsl:when test="starts-with(normalize-space(.), 'R:')">
+					<include item="topicTitle_root" />
+				</xsl:when>
+				<xsl:otherwise />
+			</xsl:choose>
 		</referenceLink>
 	</xsl:template>
 

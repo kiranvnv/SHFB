@@ -2,14 +2,14 @@
 // System  : EWSoftware Design Time Attributes and Editors
 // File    : MemberIdFixUpPlugInConfigDlg.cs
 // Author  : Eric Woodruff  (Eric@EWoodruff.us)
-// Updated : 11/14/2014
-// Note    : Copyright 2014, Eric Woodruff, All rights reserved
+// Updated : 03/26/2018
+// Note    : Copyright 2014-2018, Eric Woodruff, All rights reserved
 // Compiler: Microsoft Visual C#
 //
 // This file contains the form used to edit the member ID fix-up plug-in configuration
 //
 // This code is published under the Microsoft Public License (Ms-PL).  A copy of the license should be
-// distributed with the code.  It can also be found at the project website: https://GitHub.com/EWSoftware/SHFB.  This
+// distributed with the code and can be found at the project website: https://GitHub.com/EWSoftware/SHFB.  This
 // notice, the author's name, and all copyright notices must remain intact in all applications, documentation,
 // and source files.
 //
@@ -17,6 +17,8 @@
 // ==============================================================================================================
 // 11/14/2014  EFW  Created the code
 //===============================================================================================================
+
+// Ignore Spelling: cli
 
 using System;
 using System.Linq;
@@ -38,6 +40,7 @@ namespace SandcastleBuilder.PlugIns
 
         private XElement config;     // The configuration
         private bool isDeleting;
+
         #endregion
 
         #region Properties
@@ -46,10 +49,8 @@ namespace SandcastleBuilder.PlugIns
         /// <summary>
         /// This is used to return the configuration information
         /// </summary>
-        public string Configuration
-        {
-            get { return config.ToString(); }
-        }
+        public string Configuration => config.ToString();
+
         #endregion
 
         #region Constructor
@@ -188,10 +189,14 @@ namespace SandcastleBuilder.PlugIns
             TreeNode node = null;
 
             string[,] cppExpressions = new[,] {
+                // Overload topic links fix-up
+                { "!:O:", "O:" },
                 // Strip out "`" followed by digits
                 { "`[0-9]+(\\{)", "$1" },
                 // Strip out superfluous "^"
                 { "(member name=\".*?System\\.Collections\\.Generic.*?)(\\^)", "$1" },
+                // Convert exclamation point to pipe
+                { "(member name=\".*?System\\.Collections\\.Generic.*?)\\!", "$1|" },
                 // Fix-up valid cref attributes that the compiler couldn't figure out
                 { "cref=\"!:([EFGMNPT]|Overload):", "cref=\"$1:" },
                 // Convert interior_ptr<T> to an explicit dereference
@@ -219,6 +224,9 @@ namespace SandcastleBuilder.PlugIns
                 tvExpressions.SelectedNode = node;
                 node.EnsureVisible();
                 txtMatchExpression.Focus();
+
+                btnDelete.Enabled = txtMatchExpression.Enabled = txtReplacementValue.Enabled =
+                    chkMatchAsRegEx.Enabled = true;
             }
         }
 

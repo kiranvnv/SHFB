@@ -2,7 +2,7 @@
 // System  : Sandcastle Help File Builder MSBuild Tasks
 // File    : BuildHelp.cs
 // Author  : Eric Woodruff  (Eric@EWoodruff.us)
-// Updated : 06/06/2015
+// Updated : 12/01/2015
 // Note    : Copyright 2008-2015, Eric Woodruff, All rights reserved
 // Compiler: Microsoft Visual C#
 //
@@ -26,6 +26,8 @@
 // 03/30/2015  EFW  Added support for the Markdown output format
 // 05/03/2015  EFW  Removed support for the MS Help 2 file format
 //===============================================================================================================
+
+// Ignore Spelling: arning mshc docx md
 
 using System;
 using System.Collections;
@@ -130,6 +132,20 @@ namespace SandcastleBuilder.Utils.MSBuild
         /// Sandcastle project to build.  If set to true, the specified <see cref="ProjectFile" /> is loaded.
         /// In such cases, command line property overrides are ignored.</value>
         public bool AlwaysLoadProject { get; set; }
+
+        /// <summary>
+        /// <para>Optional String parameter.</para>
+        /// <para>A semicolon-delimited list of property name/value pairs that override properties read from the
+        /// <see cref="ProjectFile" />.</para>
+        /// </summary>
+        /// <remarks>
+        /// <para>Use this to provide dynamic properties, that are created during build. When building inside
+        /// Visual Studio, only static properties are available.</para>
+        /// <para>This could for example be used if there are custom MSBuild targets that initialize properties
+        /// with version information.</para>
+        /// </remarks>
+        /// <example>Properties="Version=$(SemVersion);Optimize=$(Optimize)"</example>
+        public string Properties { get; set; }
 
         #endregion
 
@@ -344,6 +360,28 @@ namespace SandcastleBuilder.Utils.MSBuild
                     msBuildProject.ReevaluateIfNecessary();
                 }
 
+                // initialize properties that where provided in Properties
+                if(!string.IsNullOrWhiteSpace(Properties))
+                {
+                    foreach(string propertyKeyValue in this.Properties.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries))
+                    {
+                        int length = propertyKeyValue.IndexOf('=');
+                        if(length != -1)
+                        {
+                            string propertyKey = propertyKeyValue.Substring(0, length).Trim();
+                            string propertyValue = propertyKeyValue.Substring(length + 1).Trim();
+
+                            if(!string.IsNullOrWhiteSpace(propertyKey))
+                            {
+                                Log.LogMessage(MessageImportance.Low, "Setting property {0}={1}", propertyKey, propertyValue);
+                                msBuildProject.SetGlobalProperty(propertyKey, propertyValue);
+                            }
+                        }
+                    }
+
+                    msBuildProject.ReevaluateIfNecessary();
+                }
+
                 cts = new CancellationTokenSource();
 
                 // Associate the MSBuild project with a SHFB project instance and build it
@@ -421,6 +459,7 @@ namespace SandcastleBuilder.Utils.MSBuild
             PropertyInfo propInfo;
             IEnumerable configCache;
             ProjectInstance project, lastMatchingProject = null;
+            string projectInstanceFieldName = "projectInstance", configCacheFieldName = "configCache";
 
             // See if we can get the project instance from the build engine for this task.  This is preferred
             // as it will work when building projects synchronously or in parallel.
@@ -433,6 +472,19 @@ namespace SandcastleBuilder.Utils.MSBuild
                 fieldInfo = taskHostType.GetField("targetBuilderCallback", BindingFlags.NonPublic |
                     BindingFlags.Instance);
 
+                if(fieldInfo == null)
+                {
+                    // MSBuild 14.0 adds an underscore to the field names
+                    fieldInfo = taskHostType.GetField("_targetBuilderCallback", BindingFlags.NonPublic |
+                        BindingFlags.Instance);
+
+                    if(fieldInfo != null)
+                    {
+                        projectInstanceFieldName = "_" + projectInstanceFieldName;
+                        configCacheFieldName = "_" + configCacheFieldName;
+                    }
+                }
+
                 if(fieldInfo != null)
                 {
                     // ... get the target builder ...
@@ -440,7 +492,7 @@ namespace SandcastleBuilder.Utils.MSBuild
 
                     if(targetBuilder != null)
                     {
-                        fieldInfo = targetBuilderType.GetField("projectInstance", BindingFlags.NonPublic |
+                        fieldInfo = targetBuilderType.GetField(projectInstanceFieldName, BindingFlags.NonPublic |
                             BindingFlags.Instance);
 
                         if(fieldInfo != null)
@@ -456,7 +508,7 @@ namespace SandcastleBuilder.Utils.MSBuild
             }
 
             // If not, from the BuildManager ...
-            fieldInfo = typeof(BuildManager).GetField("configCache", BindingFlags.NonPublic | BindingFlags.Instance);
+            fieldInfo = typeof(BuildManager).GetField(configCacheFieldName, BindingFlags.NonPublic | BindingFlags.Instance);
 
             if(fieldInfo == null)
                 return null;
@@ -527,21 +579,21 @@ namespace SandcastleBuilder.Utils.MSBuild
                         m.Groups[1].Value, 0, 0, 0, 0, m.Groups[5].Value.Trim());
                 else
                     if(String.Compare(m.Groups[3].Value, "error", StringComparison.OrdinalIgnoreCase) == 0)
-                        Log.LogError(null, m.Groups[4].Value, m.Groups[4].Value,
-                            m.Groups[1].Value, 0, 0, 0, 0, m.Groups[5].Value.Trim());
-                    else
-                        Log.LogMessage(MessageImportance.High, value.Message);
+                    Log.LogError(null, m.Groups[4].Value, m.Groups[4].Value,
+                        m.Groups[1].Value, 0, 0, 0, 0, m.Groups[5].Value.Trim());
+                else
+                    Log.LogMessage(MessageImportance.High, value.Message);
             }
             else
                 if(this.Verbose)
-                    Log.LogMessage(MessageImportance.High, value.Message);
-                else
-                {
-                    // If not doing verbose logging, show warnings and let MSBuild filter them out if not
-                    // wanted.  Errors will kill the build so we don't have to deal with them here.
-                    if(reWarning.IsMatch(value.Message))
-                        Log.LogWarning(value.Message);
-                }
+                Log.LogMessage(MessageImportance.High, value.Message);
+            else
+            {
+                // If not doing verbose logging, show warnings and let MSBuild filter them out if not
+                // wanted.  Errors will kill the build so we don't have to deal with them here.
+                if(reWarning.IsMatch(value.Message))
+                    Log.LogWarning(value.Message);
+            }
 
             if(value.StepChanged)
             {

@@ -100,17 +100,6 @@ namespace Sandcastle.Core.BuildAssembler
         }
 
         /// <summary>
-        /// This method is obsolete and has been replaced by <see cref="ToArray"/>
-        /// </summary>
-        /// <param name="iterator">The XPath iterator to convert to an array</param>
-        /// <returns>An array with the cloned nodes from the iterator</returns>
-        [Obsolete("Use the BuildComponentUtilities.ToArray() extension method instead.")]
-        public static XPathNavigator[] ConvertNodeIteratorToArray(this XPathNodeIterator iterator)
-        {
-            return iterator.ToArray();
-        }
-
-        /// <summary>
         /// Convert an XPath node iterator to an array
         /// </summary>
         /// <param name="iterator">The XPath iterator to convert to an array</param>
@@ -137,6 +126,7 @@ namespace Sandcastle.Core.BuildAssembler
         /// <param name="document">The document to use</param>
         /// <param name="expression">The XPath expression to evaluate</param>
         /// <param name="context">The context to use</param>
+        /// <returns>The evaluated expression result</returns>
         /// <overloads>There are two overloads for this method</overloads>
         public static string EvalXPathExpr(this IXPathNavigable document, XPathExpression expression,
           CustomContext context)
@@ -154,6 +144,7 @@ namespace Sandcastle.Core.BuildAssembler
         /// <param name="document">The document to use</param>
         /// <param name="expression">The XPath expression to evaluate</param>
         /// <param name="keyValuePairs">A set of key/value pairs to use when creating the context</param>
+        /// <returns>The evaluated expression result</returns>
         /// <example>
         /// <code language="cs">
         /// string result = document.EvalXPathExpr("concat($key, '.htm')", "key", "filename");
@@ -181,6 +172,7 @@ namespace Sandcastle.Core.BuildAssembler
         /// </summary>
         /// <param name="path">The path to adjust including the filename</param>
         /// <param name="basePath">The base path to use including the filename</param>
+        /// <returns>The path argument as a path relative to the given base path</returns>
         /// <example>
         /// <code language="none" title=" ">
         /// path:     "xxx/aaa/target.html"

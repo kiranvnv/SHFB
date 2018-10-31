@@ -21,6 +21,8 @@
 //                  appear when appropriate.
 //===============================================================================================================
 
+// Ignore Spelling: threadsafety langword
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -122,15 +124,15 @@ namespace SandcastleBuilder.Package.IntelliSense
                     "This element is used to create a link to a MAML topic within the See Also section of a " +
                     "topic or an inline link to a MAML topic within one of the other XML comments elements.",
                     iconSource, ""),
-                new Completion("inheritdoc", prefix + "inheritdoc/>", "This element can help minimize the " +
+                new SandcastleCompletion("inheritdoc", prefix + "inheritdoc/>", "This element can help minimize the " +
                     "effort required to document complex APIs by allowing common documentation to be " +
                     "inherited from base types/members.", iconSource, ""),
-                new CustomCompletion(session, "inheritdoc cref", prefix + "inheritdoc cref=\"\xFF\"/>",
+                new CustomCompletion(session, "inheritdocCref", prefix + "inheritdoc cref=\"\xFF\"/>",
                     "Inherit documentation from a specific member.", iconSource, ""),
-                new CustomCompletion(session, "inheritdoc cref/select", prefix + "inheritdoc cref=\"\xFF\" " +
+                new CustomCompletion(session, "inheritdocCrefSelect", prefix + "inheritdoc cref=\"\xFF\" " +
                     "select=\"summary|remarks\"/>", "Inherit documentation from a specific member and comments.",
                     iconSource, ""),
-                new Completion("token", prefix + "token", "This element represents a replaceable tag within " +
+                new SandcastleCompletion("token", prefix + "token", "This element represents a replaceable tag within " +
                     "a topic.", iconSource, "")
             };
 
@@ -138,23 +140,23 @@ namespace SandcastleBuilder.Package.IntelliSense
             if(allTags.Contains("exception"))
                 completions.AddRange(new[]
                 {
-                    new Completion("AttachedEventComments", prefix + "AttachedEventComments", "This element " +
+                    new SandcastleCompletion("AttachedEventComments", prefix + "AttachedEventComments", "This element " +
                         "is used to define the content that should appear on the auto-generated attached " +
                         "event member topic for a given WPF routed event member.", iconSource, ""),
-                    new Completion("AttachedPropertyComments", prefix + "AttachedPropertyComments",
+                    new SandcastleCompletion("AttachedPropertyComments", prefix + "AttachedPropertyComments",
                         "This element is used to define the content that should appear on the auto-generated " +
                         "attached property member topic for a given WPF dependency property member.",
                         iconSource, ""),
                     new CustomCompletion(session, "event", prefix + "event cref=\"\xFF\"",
                         "This element is used to list events that can be raised by a type's member.",
                         iconSource, ""),
-                    new Completion("overloads", prefix + "overloads", "This element is used to define the " +
+                    new SandcastleCompletion("overloads", prefix + "overloads", "This element is used to define the " +
                         "content that should appear on the auto-generated overloads topic for a given set of " +
                         "member overloads.", iconSource, ""),
-                    new Completion("preliminary", prefix + "preliminary/>",
+                    new SandcastleCompletion("preliminary", prefix + "preliminary/>",
                         "This element is used to indicate that a particular type or member is preliminary and " +
                         "is subject to change.", iconSource, ""),
-                    new Completion("threadsafety", prefix + "threadsafety static=\"true\" instance=\"false\"/>",
+                    new SandcastleCompletion("threadsafety", prefix + "threadsafety static=\"true\" instance=\"false\"/>",
                         "This element is used to indicate whether or not a class or structure's static and " +
                         "instance members are safe for use in multi-threaded scenarios.", iconSource, "")
                 });
@@ -164,7 +166,7 @@ namespace SandcastleBuilder.Package.IntelliSense
             {
                 completions.AddRange(new[]
                 {
-                    new Completion("note", prefix + "note type=\"note\"", "This element is used to create a " +
+                    new SandcastleCompletion("note", prefix + "note type=\"note\"", "This element is used to create a " +
                         "note-like section within a topic to draw attention to some important information.",
                         iconSource, "")
                 });
@@ -173,23 +175,25 @@ namespace SandcastleBuilder.Package.IntelliSense
                 // Sandcastle only uses them if they are inline.
                 completions.AddRange(new[]
                 {
-                    new Completion("null", prefix + "see langword=\"null\"/>", "Inserts the language-specific " +
+                    new SandcastleCompletion("null", prefix + "see langword=\"null\"/>", "Inserts the language-specific " +
                         "keyword 'null'.", macroIconSource, ""),
-                    new Completion("static", prefix + "see langword=\"static\"/>", "Inserts the " +
+                    new SandcastleCompletion("static", prefix + "see langword=\"static\"/>", "Inserts the " +
                         "language-specific keyword 'static'.", macroIconSource, ""),
-                    new Completion("virtual", prefix + "see langword=\"virtual\"/>", "Inserts the " +
+                    new SandcastleCompletion("virtual", prefix + "see langword=\"virtual\"/>", "Inserts the " +
                         "language-specific keyword 'virtual'.", macroIconSource, ""),
-                    new Completion("true", prefix + "see langword=\"true\"/>", "Inserts the language-specific " +
+                    new SandcastleCompletion("true", prefix + "see langword=\"true\"/>", "Inserts the language-specific " +
                         "keyword 'true'.", macroIconSource, ""),
-                    new Completion("false", prefix + "see langword=\"false\"/>", "Inserts the " +
+                    new SandcastleCompletion("false", prefix + "see langword=\"false\"/>", "Inserts the " +
                         "language-specific keyword 'false'.", macroIconSource, ""),
-                    new Completion("abstract", prefix + "see langword=\"abstract\"/>", "Inserts the " +
+                    new SandcastleCompletion("abstract", prefix + "see langword=\"abstract\"/>", "Inserts the " +
                         "language-specific keyword 'abstract'.", macroIconSource, ""),
-                    new Completion("async", prefix + "see langword=\"async\"/>", "Inserts the " +
+                    new SandcastleCompletion("sealed", prefix + "see langword=\"sealed\"/>", "Inserts the " +
+                        "language-specific keyword 'sealed'.", macroIconSource, ""),
+                    new SandcastleCompletion("async", prefix + "see langword=\"async\"/>", "Inserts the " +
                         "language-specific keyword 'async'.", macroIconSource, ""),
-                    new Completion("await", prefix + "see langword=\"await\"/>", "Inserts the " +
+                    new SandcastleCompletion("await", prefix + "see langword=\"await\"/>", "Inserts the " +
                         "language-specific keyword 'await'.", macroIconSource, ""),
-                    new Completion("async/await", prefix + "see langword=\"async/await\"/>", "Inserts the " +
+                    new SandcastleCompletion("asyncAwait", prefix + "see langword=\"async/await\"/>", "Inserts the " +
                         "language-specific keyword 'async/await'.", macroIconSource, "")
                 });
             }
@@ -198,11 +202,11 @@ namespace SandcastleBuilder.Package.IntelliSense
             if(allTags.Contains("code"))
                 completions.AddRange(new[]
                 {
-                    new CustomCompletion(session, "code import", prefix + "code language=\"\xFF\" title=\" \" " +
+                    new CustomCompletion(session, "codeImport", prefix + "code language=\"\xFF\" title=\" \" " +
                         "source=\"..\\Path\\SourceFile.cs\" region=\"Region Name\"/>", "This element is used " +
                         "to indicate that a multi-line section of text should be imported from the named " +
                         "region of the named file and formatted as a code block.", iconSource, ""),
-                    new CustomCompletion(session, "code language", prefix + "code language=\"\xFF\" " +
+                    new CustomCompletion(session, "codeLanguage", prefix + "code language=\"\xFF\" " +
                         "title=\" \"></code>", "This element is used to indicate that a multi-line section of " +
                         "text should be formatted as a code block.", iconSource, ""),
                 });

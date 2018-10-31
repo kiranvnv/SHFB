@@ -3,43 +3,78 @@
 REM Point SHFBROOT at the development folder so that all help files are built using the latest version of the tools.
 SETLOCAL
 
-SET MSBUILD=%ProgramFiles(x86)%\MSBuild\12.0\bin\MSBuild.exe
+SET MSBUILD=%ProgramFiles(x86)%\MSBuild\14.0\bin\MSBuild.exe
 SET NUGET=%CD%\SHFB\Source\.nuget\NuGet.exe
 SET SHFBROOT=%CD%\SHFB\Deploy\
 SET BuildConfig=%1
 
 IF '%BuildConfig%'=='' SET BuildConfig=Release
 
-REM Use Visual Studio 2015 references if Visual Studio 2013 is not present
-IF NOT EXIST "%VS120COMNTOOLS%..\IDE\devenv.exe" SET VisualStudioVersion=14.0
-
 CD SHFB\Source
+
+ECHO *
+ECHO * Core tools
+ECHO *
 
 "%NUGET%" restore "SandcastleTools.sln"
 "%MSBUILD%" /nologo /v:m /m "SandcastleTools.sln" /t:Clean;Build "/p:Configuration=%BuildConfig%;Platform=Any CPU"
 
 IF ERRORLEVEL 1 GOTO End
 
+ECHO *
+ECHO * Standalone GUI
+ECHO *
+
 "%NUGET%" restore "SandcastleBuilder.sln"
 "%MSBUILD%" /nologo /v:m /m "SandcastleBuilder.sln" /t:Clean;Build "/p:Configuration=%BuildConfig%;Platform=Any CPU"
 
 IF ERRORLEVEL 1 GOTO End
 
-REM Enforce use of VS 2010 SDK if present.  If not it tries to use the VS 2011 SDK even if its not there.
-REM IF EXIST "%ProgramFiles(x86)%\MSBuild\Microsoft\VisualStudio\v10.0\VSSDK\Microsoft.VsSDK.targets" SET VisualStudioVersion=10.0
+REM We need to use MSBuild 15.0 if present in order to support the new VSIX format in VS2017 and later
+IF EXIST "%ProgramFiles(x86)%\Microsoft Visual Studio\2017\Community\MSBuild\15.0" SET "VS150COMNTOOLS=%ProgramFiles(x86)%\Microsoft Visual Studio\2017\Community\MSBuild\15.0"
+IF EXIST "%ProgramFiles(x86)%\Microsoft Visual Studio\2017\Professional\MSBuild\15.0" SET "VS150COMNTOOLS=%ProgramFiles(x86)%\Microsoft Visual Studio\2017\Professional\MSBuild\15.0"
+IF EXIST "%ProgramFiles(x86)%\Microsoft Visual Studio\2017\Enterprise\MSBuild\15.0" SET "VS150COMNTOOLS=%ProgramFiles(x86)%\Microsoft Visual Studio\2017\Enterprise\MSBuild\15.0"
+
+REM If it's not there, use MSBuild 14.0
+IF NOT EXIST "%VS150COMNTOOLS%\bin\MSBuild.exe" SET VS15COMNTOOLS=%ProgramFiles(x86)%\MSBuild\14.0
+IF NOT EXIST "%VS150COMNTOOLS%\bin\MSBuild.exe" GOTO BuildDocs
+
+ECHO *
+ECHO * VS2015 and later package
+ECHO *
 
 "%NUGET%" restore "SandcastleBuilderPackage.sln"
-"%MSBUILD%" /nologo /v:m /m "SandcastleBuilderPackage.sln" /t:Clean;Build "/p:Configuration=%BuildConfig%;Platform=Any CPU"
+"%VS150COMNTOOLS%\bin\MSBuild.exe" /nologo /v:m /m "SandcastleBuilderPackage.sln" /t:Clean;Build "/p:Configuration=%BuildConfig%;Platform=Any CPU"
 IF ERRORLEVEL 1 GOTO End
-GOTO BuildDocs
 
 :BuildDocs
 
 REM Skip help file and setup build if there is no reflection data yet
-IF NOT EXIST %SHFBROOT%\Data\.NETFramework\*.xml GOTO MissingReflectionData
+IF EXIST %SHFBROOT%\Data\.NETFramework\*.xml GOTO ReflectionDataExists
+
+ECHO *
+ECHO *
+ECHO * Reflection data does not exist for the frameworks.  Building default
+ECHO * set for the latest version of the .NETFramework platform on this
+ECHO * system.  See the System Requirements and Building the Code wiki topic
+ECHO * for topic for more information:
+ECHO *
+ECHO * https://github.com/EWSoftware/SHFB/wiki/System-Requirements-and-Building-the-Code
+ECHO *
+ECHO *
+
+%SHFBROOT%ReflectionDataManager /platform:.NETFramework
+
+IF ERRORLEVEL 1 GOTO End
+
+:ReflectionDataExists
 
 CD ..\..\Documentation
 IF EXIST .\WebHelp\*.* RD /S /Q .\WebHelp
+
+ECHO *
+ECHO * Documentation
+ECHO *
 
 "%MSBUILD%" /nologo /v:m "AllDocumentation.sln" /t:Clean;Build "/p:Configuration=%BuildConfig%;Platform=Any CPU"
 
@@ -61,16 +96,6 @@ CD ..\..\NuGet
 BuildNuGet.bat
 
 CD ..
-
-GOTO End
-
-:MissingReflectionData
-ECHO *
-ECHO *
-ECHO * Reflection data has not been built yet.  Help file and setup file generation skipped.
-ECHO * See ReadMe.txt for more information on running BuildReflectionData.bat.
-ECHO *
-ECHO *
 
 :End
 

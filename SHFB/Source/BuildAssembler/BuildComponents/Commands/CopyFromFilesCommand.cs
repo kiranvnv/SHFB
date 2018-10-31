@@ -14,6 +14,8 @@ using System.Xml.XPath;
 using Sandcastle.Core.BuildAssembler;
 using Sandcastle.Core.BuildAssembler.BuildComponent;
 
+using Microsoft.Ddue.Tools.BuildComponent;
+
 namespace Microsoft.Ddue.Tools.Commands
 {
     /// <summary>
@@ -93,11 +95,12 @@ namespace Microsoft.Ddue.Tools.Commands
                     // Don't warn or generate an error if no source nodes are found, that may be the case
                 }
                 else
-                    base.ParentComponent.WriteMessage(MessageLevel.Error, "CopyFromFilesCommand target node " +
-                        "not found");
+                    this.ParentComponent.WriteMessage(MessageLevel.Error, "CopyFromFilesCommand target node " +
+                        "not found: {0}", targetExpr.Expression);
             }
             else
-                base.ParentComponent.WriteMessage(MessageLevel.Error, "CopyFromFilesCommand source file not found");
+                this.ParentComponent.WriteMessage(MessageLevel.Error, "CopyFromFilesCommand source file not " +
+                    "found: {0}", filePath);
         }
         #endregion
     }

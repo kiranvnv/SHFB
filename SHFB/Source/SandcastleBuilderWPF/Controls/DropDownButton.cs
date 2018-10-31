@@ -20,6 +20,8 @@
 // 1.9.3.3  12/04/2011  EFW  Added the code to the project
 //=============================================================================
 
+// Ignore Spelling: Huy Pham
+
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -36,7 +38,7 @@ namespace SandcastleBuilder.WPF.Controls
     /// <para><b>NOTE:</b> This control's resources must be included in the application, window, or user control
     /// resources.  For example:</para>
     /// 
-    /// <code lang="xml">
+    /// <code language="xml">
     /// &lt;Application.Resources&gt;
     ///   &lt;ResourceDictionary Source="/SandcastleBuilder.WPF;component/Controls/DropDownButtonStyle.xaml" /&gt;
     /// &lt;/Application.Resources&gt;

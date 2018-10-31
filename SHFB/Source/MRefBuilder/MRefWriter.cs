@@ -12,17 +12,24 @@
 // to property getters and setters.  Added code to write out type data for the interop attributes that are
 // converted to type metadata.
 // 08/06/2014 - EFW - Added code to write out values for literal (constant) fields.
+// 08/23/2016 - EFW - Added support for writing out source code context
+// 03/17/2017 - EFW - Added support for value tuples
+// 05/26/2017 - EFW - Fixed up issues with unsigned long enumerated types and duplicate flag values
+// 05/30/2017 - JRC - Fixed issue with negative enums
 
 using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Xml;
 
 using System.Compiler;
 
 using Microsoft.Ddue.Tools.Reflection;
+
+using Sandcastle.Core;
 
 namespace Microsoft.Ddue.Tools
 {
@@ -41,11 +48,9 @@ namespace Microsoft.Ddue.Tools
         private Dictionary<TypeNode, List<TypeNode>> descendantIndex;
         private Dictionary<Interface, List<TypeNode>> implementorIndex;
 
-        private List<Namespace> parsedNamespaces;
-        private List<TypeNode> parsedTypes;
-        private List<Member> parsedMembers;
-
         private Dictionary<string, List<MRefBuilderCallback>> startTagCallbacks, endTagCallbacks;
+
+        private int namespaceCount, typeCount, memberCount;
 
         #endregion
 
@@ -61,27 +66,27 @@ namespace Microsoft.Ddue.Tools
         }
 
         /// <summary>
-        /// This read-only property returns an enumerable list of namespaces found
+        /// This read-only property returns a count of the namespaces found
         /// </summary>
-        public IEnumerable<Namespace> Namespaces
+        public int NamespaceCount
         {
-            get { return parsedNamespaces; }
+            get { return namespaceCount; }
         }
 
         /// <summary>
-        /// This read-only property returns an enumerable list of the types found
+        /// This read-only property returns a count of the types found
         /// </summary>
-        public IEnumerable<TypeNode> Types
+        public int TypeCount
         {
-            get { return parsedTypes; }
+            get { return typeCount; }
         }
 
         /// <summary>
-        /// This read-only property returns an enumerable list of the members found
+        /// This read-only property returns a count of the members found
         /// </summary>
-        public IEnumerable<Member> Members
+        public int MemberCount
         {
-            get { return parsedMembers; }
+            get { return memberCount; }
         }
         #endregion
 
@@ -94,17 +99,18 @@ namespace Microsoft.Ddue.Tools
         /// <param name="output">The text writer to which the output is written</param>
         /// <param name="namer">The API namer to use</param>
         /// <param name="resolver">The assembly resolver to use</param>
+        /// <param name="sourceCodeBasePath">An optional base path to the source code.  If set, source code
+        /// context information will be included in the reflection data when possible.</param>
+        /// <param name="warnOnMissingContext">True to report missing type source contexts as warnings rather
+        /// than as informational messages.</param>
         /// <param name="filter">The API filter to use</param>
         public ManagedReflectionWriter(TextWriter output, ApiNamer namer, AssemblyResolver resolver,
-          ApiFilter filter) : base(resolver, filter)
+          string sourceCodeBasePath, bool warnOnMissingContext, ApiFilter filter) :
+          base(sourceCodeBasePath, warnOnMissingContext, resolver, filter)
         {
             assemblyNames = new HashSet<string>();
             descendantIndex = new Dictionary<TypeNode, List<TypeNode>>();
             implementorIndex = new Dictionary<Interface, List<TypeNode>>();
-
-            parsedNamespaces = new List<Namespace>();
-            parsedTypes = new List<TypeNode>();
-            parsedMembers = new List<Member>();
 
             startTagCallbacks = new Dictionary<string, List<MRefBuilderCallback>>();
             endTagCallbacks = new Dictionary<string, List<MRefBuilderCallback>>();
@@ -181,7 +187,7 @@ namespace Microsoft.Ddue.Tools
         /// <inheritdoc />
         protected override void VisitNamespace(Namespace space)
         {
-            parsedNamespaces.Add(space);
+            namespaceCount++;
 
             this.WriteNamespace(space);
             base.VisitNamespace(space);
@@ -190,16 +196,187 @@ namespace Microsoft.Ddue.Tools
         /// <inheritdoc />
         protected override void VisitType(TypeNode type)
         {
-            parsedTypes.Add(type);
+            SourceContext typeSourceContext = new SourceContext(new Document(), -1, -1);
+            bool typeSourceContextSet = false;
+
+            typeCount++;
+
+            // Load source context information for each member.  Since there's no way to get the source file
+            // for a type from a PDB, we'll rely on one of the members to provide that information if possible.
+            if(this.SourceCodeBasePath != null && this.ApiFilter.IsExposedType(type))
+            {
+                foreach(Member member in type.Members.Where(m => this.ApiFilter.IsExposedMember(m)))
+                {
+                    Method method = null;
+
+                    switch(member.NodeType)
+                    {
+                        case NodeType.InstanceInitializer:
+                        case NodeType.StaticInitializer:
+                        case NodeType.Method:
+                            method = (Method)member;
+                            this.SetSourceContext(method);
+                            break;
+
+                        case NodeType.Property:
+                            Property p = (Property)member;
+
+                            if(p.Getter != null)
+                            {
+                                method = p.Getter;
+                                this.SetSourceContext(method);
+                            }
+                            else
+                                if(p.Setter != null)
+                                {
+                                    method = p.Setter;
+                                    this.SetSourceContext(method);
+                                }
+                            break;
+
+                        default:
+                            break;
+                    }
+
+                    if(!typeSourceContextSet && method != null && method.FirstLineContext.Document != null &&
+                      !String.IsNullOrWhiteSpace(method.FirstLineContext.Document.Name))
+                    {
+                        typeSourceContext.Document.Name = method.FirstLineContext.Document.Name;
+                        typeSourceContextSet = true;
+                    }
+                }
+
+                if(!typeSourceContextSet)
+                {
+                    typeSourceContext.Document.Name = this.FindSourceFileForType(type.FullName);
+
+                    if(typeSourceContext.Document.Name == null)
+                    {
+                        System.Diagnostics.Debug.WriteLine("Source code location not found for " + type.FullName);
+                        ConsoleApplication.WriteMessage(this.WarnOnMissingContext ? LogLevel.Warn : LogLevel.Info,
+                            "Source code location not found for {0}", type.FullName);
+                    }
+                }
+
+                type.SourceContext = typeSourceContext;
+            }
 
             this.WriteType(type);
             base.VisitType(type);
         }
 
+        /// <summary>
+        /// This loads the source code context for the given method
+        /// </summary>
+        /// <param name="method">The method for which to load source context info</param>
+        private void SetSourceContext(Method method)
+        {
+            if(method.DeclaringType.DeclaringModule.reader.PdbExists && method.ProviderHandle is int &&
+              method.FirstLineContext.Document == null)
+            {
+                uint token = (uint)(int)method.ProviderHandle | 0x06000000;
+                method.DeclaringType.DeclaringModule.reader.GetMethodDebugSymbols(method, token);
+
+                if(method.FirstLineContext.Document != null)
+                {
+                    string sourceFile = method.FirstLineContext.Document.Name;
+
+                    if(sourceFile.StartsWith(this.SourceCodeBasePath, StringComparison.OrdinalIgnoreCase))
+                        method.FirstLineContext.Document.Name = sourceFile.Substring(this.SourceCodeBasePath.Length);
+                    else
+                        method.FirstLineContext.Document.Name = String.Empty;
+                }
+            }
+        }
+
+        /// <summary>
+        /// This is used to try and find the source code file for the given type name by searching the source
+        /// path for a like-named file.
+        /// </summary>
+        /// <param name="fullTypeName">The full type name for which to try and locate a source code file</param>
+        /// <returns>The filename if successful or null if not</returns>
+        /// <remarks>This is typically needed for empty classes, interfaces, and enumerations which don't have
+        /// sequence points in the PDB file.  This makes the assumption that the source code is structured in
+        /// folders named after the namespaces with each file named after the class it represents.</remarks>
+        private string FindSourceFileForType(string fullTypeName)
+        {
+            Stack<string> typeNameParts = new Stack<string>(fullTypeName.Split('.'));
+            string sourceFile = null, searchPattern = typeNameParts.Pop();
+            int pos;
+
+            // For nested types, look for the parent type
+            pos = searchPattern.IndexOf('+');
+
+            if(pos != -1)
+                searchPattern = searchPattern.Substring(0, pos);
+
+            try
+            {
+                var matches = Directory.EnumerateFiles(this.SourceCodeBasePath, searchPattern + "*",
+                    SearchOption.AllDirectories).ToList();
+
+                // If we didn't get a match and the name contains a template parameter count, remove it and
+                // try again.
+                if(matches.Count == 0 && searchPattern.IndexOf('`') != -1)
+                {
+                    searchPattern = searchPattern.Substring(0, searchPattern.IndexOf('`'));
+
+                    matches = Directory.EnumerateFiles(this.SourceCodeBasePath, searchPattern + "*",
+                        SearchOption.AllDirectories).ToList();
+                }
+
+                if(matches.Count > 1)
+                {
+                    // Look for an exact match by type name
+                    matches = matches.Where(m => Path.GetFileNameWithoutExtension(m).EndsWith(searchPattern,
+                        StringComparison.OrdinalIgnoreCase)).ToList();
+
+                    if(matches.Count != 1)
+                    {
+                        // If more than one match was found, add namespace parts to further qualify the name
+                        // to see if we can find a single best match.
+                        while(typeNameParts.Count != 0)
+                        {
+                            searchPattern = typeNameParts.Pop() + "\\" + searchPattern;
+
+                            var namespaceMatches = matches.Where(m => Path.Combine(
+                                Path.GetDirectoryName(m), Path.GetFileNameWithoutExtension(m)).EndsWith(
+                                searchPattern, StringComparison.OrdinalIgnoreCase)).ToList();
+
+                            if(namespaceMatches.Count == 1)
+                            {
+                                sourceFile = namespaceMatches[0];
+                                break;
+                            }
+
+                            if(namespaceMatches.Count == 0)
+                                break;
+                        }
+                    }
+                    else
+                        sourceFile = matches[0];
+                }
+                else
+                    if(matches.Count == 1 && Path.GetFileNameWithoutExtension(matches[0]).EndsWith(searchPattern,
+                      StringComparison.OrdinalIgnoreCase))
+                        sourceFile = matches[0];
+
+                if(sourceFile != null && sourceFile.StartsWith(this.SourceCodeBasePath, StringComparison.OrdinalIgnoreCase))
+                    sourceFile = sourceFile.Substring(this.SourceCodeBasePath.Length);
+            }
+            catch(Exception ex)
+            {
+                // Ignore any exceptions
+                System.Diagnostics.Debug.WriteLine(ex);
+            }
+
+            return sourceFile;
+        }
+
         /// <inheritdoc />
         protected override void VisitMember(Member member)
         {
-            parsedMembers.Add(member);
+            memberCount++;
 
             writer.WriteStartElement("api");
 
@@ -208,7 +385,7 @@ namespace Microsoft.Ddue.Tools
 
             this.StartElementCallbacks("api", member);
 
-            this.WriteMember(member);
+            this.WriteMember(member, true);
 
             this.EndElementCallbacks("api", member);
 
@@ -390,14 +567,48 @@ namespace Microsoft.Ddue.Tools
 
                 if(field.DefaultValue != null)
                 {
-                    long fieldValue = Convert.ToInt64(field.DefaultValue.Value, CultureInfo.InvariantCulture);
+                   long fieldValue;
 
-                    // If a single field matches, return it.  Otherwise return all fields that are in value.
+                    if(field.DefaultValue.Value is ulong)
+                        fieldValue = unchecked((long)(ulong)field.DefaultValue.Value);
+                    else
+                        fieldValue = Convert.ToInt64(field.DefaultValue.Value, CultureInfo.InvariantCulture);
+
+                    // If a single field matches, return it.  Otherwise return all fields that are in the value
+                    // except zero.
                     if(fieldValue == value)
                         return new[] { field };
 
-                    if((fieldValue & value) == fieldValue)
+                    if(fieldValue != 0 && (fieldValue & value) == fieldValue)
                         list.Add(field);
+                }
+            }
+
+            // Remove duplicates that are in combo values. For example, in the set A, B, AplusB, remove A and B
+            // because they are present in the combined value AplusB).
+            for(int i = 0; i < list.Count; i++)
+            {
+                long fieldValue;
+
+                if(list[i].DefaultValue.Value is ulong)
+                    fieldValue = unchecked((long)(ulong)list[i].DefaultValue.Value);
+                else
+                    fieldValue = Convert.ToInt64(list[i].DefaultValue.Value, CultureInfo.InvariantCulture);
+
+                if(list.Skip(i + 1).Any(f =>
+                {
+                    long compare;
+
+                    if (f.DefaultValue.Value is ulong)
+                        compare = unchecked((long)(ulong)f.DefaultValue.Value);
+                    else
+                        compare = Convert.ToInt64(f.DefaultValue.Value, CultureInfo.InvariantCulture);
+
+                    return ((fieldValue & compare) == fieldValue);
+                }))
+                {
+                    list.RemoveAt(i);
+                    i--;
                 }
             }
 
@@ -580,6 +791,7 @@ namespace Microsoft.Ddue.Tools
             this.StartElementCallbacks("api", type);
 
             this.WriteApiData(type);
+            this.WriteSourceContext(type.SourceContext, type.SourceContext);
             this.WriteTypeData(type);
 
             switch(type.NodeType)
@@ -600,10 +812,17 @@ namespace Microsoft.Ddue.Tools
 
                 case NodeType.DelegateNode:
                     DelegateNode handler = (DelegateNode)type;
+                    AttributeList retValAttributes = null;
+
+                    var endInvoke = handler.Members.FirstOrDefault(m => m.Name.Name.Equals("EndInvoke",
+                        StringComparison.Ordinal)) as Method;
+
+                    if(endInvoke != null)
+                        retValAttributes = endInvoke.ReturnAttributes;
 
                     this.WriteGenericParameters(handler.TemplateParameters);
                     this.WriteParameters(handler.Parameters);
-                    this.WriteReturnValue(handler.ReturnType);
+                    this.WriteReturnValue(handler.ReturnType, retValAttributes);
                     break;
 
                 case NodeType.EnumNode:
@@ -738,7 +957,7 @@ namespace Microsoft.Ddue.Tools
                         write = true;
 
                     if(write)
-                        this.WriteMember(member);
+                        this.WriteMember(member, false);
 
                     writer.WriteEndElement();
                 }
@@ -829,18 +1048,22 @@ namespace Microsoft.Ddue.Tools
         /// <summary>
         /// Write out information for a member
         /// </summary>
-        /// <param name="member">The member to write out</param>
-        public void WriteMember(Member member)
+        /// <param name="member">The member to write out.</param>
+        /// <param name="includeSourceContext">True to the include source code context when possible, false to
+        /// omit it.</param>
+        public void WriteMember(Member member, bool includeSourceContext)
         {
-            this.WriteMember(member, member.DeclaringType);
+            this.WriteMember(member, member.DeclaringType, includeSourceContext);
         }
 
         /// <summary>
         /// Write out information for a member
         /// </summary>
-        /// <param name="member">The member to write out</param>
-        /// <param name="type">The declaring type of the member</param>
-        private void WriteMember(Member member, TypeNode type)
+        /// <param name="member">The member to write out.</param>
+        /// <param name="type">The declaring type of the member.</param>
+        /// <param name="includeSourceContext">True to the include source code context when possible, false to
+        /// omit it.</param>
+        private void WriteMember(Member member, TypeNode type, bool includeSourceCodeContext)
         {
             this.WriteApiData(member);
             this.WriteMemberData(member);
@@ -852,8 +1075,12 @@ namespace Microsoft.Ddue.Tools
                 case NodeType.Field:
                     Field field = (Field)member;
 
+                    // Fields never have sequence points in the PDB so use the type's source context
+                    if(includeSourceCodeContext)
+                        this.WriteSourceContext(member.DeclaringType.SourceContext, member.DeclaringType.SourceContext);
+
                     this.WriteFieldData(field);
-                    this.WriteReturnValue(field.Type);
+                    this.WriteReturnValue(field.Type, field.Attributes);
 
                     // Write enumeration and literal (constant) field values
                     if(field.DeclaringType.NodeType == NodeType.EnumNode)
@@ -869,6 +1096,9 @@ namespace Microsoft.Ddue.Tools
                 case NodeType.Method:
                     Method method = (Method)member;
 
+                    if(includeSourceCodeContext)
+                        this.WriteSourceContext(method.FirstLineContext, member.DeclaringType.SourceContext);
+
                     this.WriteProcedureData(method, method.OverriddenMember);
 
                     // Write the templates node with either the generic template parameters or the specialized
@@ -879,7 +1109,7 @@ namespace Microsoft.Ddue.Tools
                         this.WriteGenericParameters(method.TemplateParameters);
 
                     this.WriteParameters(method.Parameters);
-                    this.WriteReturnValue(method.ReturnType);
+                    this.WriteReturnValue(method.ReturnType, method.ReturnAttributes);
                     this.WriteImplementedMembers(method.GetImplementedMethods());
 
                     if(method.SecurityAttributes != null)
@@ -889,14 +1119,25 @@ namespace Microsoft.Ddue.Tools
                 case NodeType.Property:
                     Property property = (Property)member;
 
+                    if(includeSourceCodeContext)
+                        if(property.Getter != null)
+                            this.WriteSourceContext(property.Getter.FirstLineContext, member.DeclaringType.SourceContext);
+                        else
+                            if(property.Setter != null)
+                                this.WriteSourceContext(property.Setter.FirstLineContext, member.DeclaringType.SourceContext);
+
                     this.WritePropertyData(property);
                     this.WriteParameters(property.Parameters);
-                    this.WriteReturnValue(property.Type);
+                    this.WriteReturnValue(property.Type, property.Attributes);
                     this.WriteImplementedMembers(property.GetImplementedProperties());
                     break;
 
                 case NodeType.Event:
                     Event trigger = (Event)member;
+
+                    // Events never have sequence points in the PDB so use the type's source context
+                    if(includeSourceCodeContext)
+                        this.WriteSourceContext(member.DeclaringType.SourceContext, member.DeclaringType.SourceContext);
 
                     this.WriteEventData(trigger);
                     this.WriteImplementedMembers(trigger.GetImplementedEvents());
@@ -906,12 +1147,45 @@ namespace Microsoft.Ddue.Tools
                 case NodeType.StaticInitializer:
                     Method constructor = (Method)member;
 
+                    if(includeSourceCodeContext)
+                        this.WriteSourceContext(constructor.FirstLineContext, member.DeclaringType.SourceContext);
+
                     this.WriteParameters(constructor.Parameters);
                     break;
             }
 
             this.WriteMemberContainers(type);
             this.WriteAttributes(member.Attributes, securityAttributes);
+        }
+
+        /// <summary>
+        /// Write out the source code context (filename and starting line number)
+        /// </summary>
+        /// <param name="sourceContext">The source context information</param>
+        /// <param name="parentContext">The parent type's source context information.  This will be used if the
+        /// member doesn't have a source document.  This happens for interface members.</param>
+        private void WriteSourceContext(SourceContext sourceContext, SourceContext parentContext)
+        {
+            if(sourceContext.Document == null && parentContext.Document != null)
+                sourceContext = parentContext;
+
+            if(sourceContext.Document != null)
+            {
+                string sourceFile = sourceContext.Document.Name;
+
+                if(!String.IsNullOrWhiteSpace(sourceFile))
+                {
+                    sourceFile = WebUtility.UrlEncode(sourceFile).Replace("%5C", "/");
+
+                    writer.WriteStartElement("sourceContext");
+                    this.WriteStringAttribute("file", sourceFile);
+
+                    if(sourceContext.StartPos != -1)
+                        writer.WriteAttributeString("startLine", sourceContext.StartLine.ToString());
+
+                    writer.WriteEndElement();
+                }
+            }
         }
 
         /// <summary>
@@ -1258,13 +1532,77 @@ namespace Microsoft.Ddue.Tools
         /// Write out a type reference
         /// </summary>
         /// <param name="type">The type to reference</param>
-        public void WriteTypeReference(TypeNode type)
+        /// <param name="elementName">An element name if the type reference is part of a type such as
+        /// <c>ValueTuple</c> or null if not.</param>
+        /// <param name="attributes">An optional list of attributes to check for tuple element names</param>
+        public void WriteTypeReference(TypeNode type, string elementName = null, AttributeList attributes = null)
         {
             if(type == null)
                 throw new ArgumentNullException("type");
 
-            this.WriteStartTypeReference(type);
+            string[] names = null;
+
+            if(attributes != null)
+            {
+                // If the return value is a tuple, see if we can output the element names so that the
+                // presentation styles can output them in the expected format.
+                var tupleElementNames = attributes.FirstOrDefault(a => a.Type.Name.Name == "TupleElementNamesAttribute");
+
+                if(tupleElementNames != null && tupleElementNames.Expressions.Count != 0)
+                {
+                    var exp = tupleElementNames.Expressions[0] as Literal;
+
+                    if(exp != null)
+                    {
+                        names = exp.Value as string[];
+
+                        if(names != null)
+                            this.SetElementNames(type, names);
+                    }
+                }
+            }
+
+            this.WriteStartTypeReference(type, elementName);
             writer.WriteEndElement();
+        }
+
+        /// <summary>
+        /// This is used to set the element names on a <c>ValueTuple</c>
+        /// </summary>
+        /// <param name="type">The type in which to find the <c>ValueTuple</c> type</param>
+        /// <param name="names">The tuple element names</param>
+        private bool SetElementNames(TypeNode type, string[] names)
+        {
+            if(type.FullName.StartsWith("System.ValueTuple`", StringComparison.Ordinal))
+            {
+                TypeNodeList arguments = type.TemplateArguments;
+
+                if(arguments != null)
+                {
+                    // Use a simple string enumerator.  Only one array is specified even though the elements may
+                    // span more than one declaration.  This is the simplest way handle them across all such
+                    // declarations.
+                    var collection = new System.Collections.Specialized.StringCollection();
+                    collection.AddRange(names);
+                    type.ElementNames = collection.GetEnumerator();
+                    return true;
+                }
+
+                return false;
+            }
+
+            // Search the types recursively until we find it (i.e. IEnumerable<ValueTuple>)
+            if(type.IsGeneric)
+            {
+                TypeNodeList arguments = type.TemplateArguments;
+
+                if(arguments != null && arguments.Count != 0)
+                    foreach(var arg in arguments)
+                        if(this.SetElementNames(arg, names))
+                            return true;
+            }
+
+            return false;
         }
 
         /// <summary>
@@ -1500,6 +1838,9 @@ namespace Microsoft.Ddue.Tools
 
                     writer.WriteStartElement("enumValue");
 
+                    if(value is ulong)
+                        value = unchecked((long)(ulong)value);
+
                     foreach(var field in GetAppliedFields(enumeration, Convert.ToInt64(value, CultureInfo.InvariantCulture)))
                     {
                         writer.WriteStartElement("field");
@@ -1571,7 +1912,7 @@ namespace Microsoft.Ddue.Tools
             if(parameter.IsOptional)
                 this.WriteBooleanAttribute("optional", true);
 
-            this.WriteTypeReference(parameter.Type);
+            this.WriteTypeReference(parameter.Type, null, parameter.Attributes);
 
             if(parameter.IsOptional && parameter.DefaultValue != null)
                 this.WriteExpression(parameter.DefaultValue);
@@ -1687,7 +2028,9 @@ namespace Microsoft.Ddue.Tools
         /// Write a starting type reference element based on the type node
         /// </summary>
         /// <param name="type">The type for which to write a starting type reference</param>
-        private void WriteStartTypeReference(TypeNode type)
+        /// <param name="elementName">An element name if the type reference is part of a type such as
+        /// <c>ValueTuple</c> or null if not.</param>
+        private void WriteStartTypeReference(TypeNode type, string elementName = null)
         {
             switch(type.NodeType)
             {
@@ -1741,6 +2084,9 @@ namespace Microsoft.Ddue.Tools
                     {
                         writer.WriteStartElement("type");
 
+                        if(!String.IsNullOrWhiteSpace(elementName))
+                            writer.WriteAttributeString("elementName", elementName);
+
                         if(type.IsGeneric)
                         {
                             TypeNode template = type.GetTemplateType();
@@ -1757,11 +2103,18 @@ namespace Microsoft.Ddue.Tools
                                 writer.WriteStartElement("specialization");
 
                                 foreach(var arg in arguments)
-                                    this.WriteTypeReference(arg);
+                                {
+                                    string nextElementName = null;
+
+                                    // If we've got element names, pull the next one off the list and use it
+                                    if(type.ElementNames != null && type.ElementNames.MoveNext())
+                                        nextElementName = type.ElementNames.Current;
+
+                                    this.WriteTypeReference(arg, nextElementName);
+                                }
 
                                 writer.WriteEndElement();
                             }
-
                         }
                         else
                         {
@@ -1803,12 +2156,13 @@ namespace Microsoft.Ddue.Tools
         /// Write out a field or return value type
         /// </summary>
         /// <param name="type">The return value type</param>
-        private void WriteReturnValue(TypeNode type)
+        /// <param name="attributes">The return value attributes if any</param>
+        private void WriteReturnValue(TypeNode type, AttributeList attributes)
         {
             if(type.FullName != "System.Void")
             {
                 writer.WriteStartElement("returns");
-                this.WriteTypeReference(type);
+                this.WriteTypeReference(type, null, attributes);
                 writer.WriteEndElement();
             }
         }

@@ -8,7 +8,7 @@
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>{c1ab8f68-82b0-4da3-b9ee-84703c939b66}</ProjectGuid>
-    <SHFBSchemaVersion>2015.6.5.0</SHFBSchemaVersion>
+    <SHFBSchemaVersion>2017.9.26.0</SHFBSchemaVersion>
     <!-- AssemblyName, Name, and RootNamespace are not used by SHFB but Visual
          Studio adds them anyway -->
     <AssemblyName>Documentation</AssemblyName>
@@ -30,12 +30,12 @@
     </NamespaceSummaries>
     <HelpTitle>HTML to MAML Converter</HelpTitle>
     <CopyrightHref>https://GitHub.com/EWSoftware/SHFB</CopyrightHref>
-    <CopyrightText>Copyright \xA9 2008-2014, Eric Woodruff, All rights reserved</CopyrightText>
+    <CopyrightText>Copyright \xA9 2008-2015, Eric Woodruff, All rights reserved</CopyrightText>
     <FeedbackEMailAddress>Eric%40EWoodruff.us</FeedbackEMailAddress>
     <SyntaxFilters>Standard</SyntaxFilters>
     <PlugInConfigurations>
       <PlugInConfig id="Output Deployment" enabled="True">
-        <configuration deleteAfterDeploy="false">
+        <configuration deleteAfterDeploy="true" verboseLogging="false">
           <deploymentLocation id="help1x" location="..\..\..\Deploy\Help\">
             <userCredentials useDefault="true" userName="" password="" />
             <proxyCredentials useProxy="false" proxyServer="">
@@ -54,7 +54,19 @@
               <userCredentials useDefault="true" userName="" password="" />
             </proxyCredentials>
           </deploymentLocation>
-          <deploymentLocation id="website" location="">
+          <deploymentLocation id="website" location="..\..\..\..\Documentation\WebHelp\HtmlToMamlDocs">
+            <userCredentials useDefault="true" userName="" password="" />
+            <proxyCredentials useProxy="false" proxyServer="">
+              <userCredentials useDefault="true" userName="" password="" />
+            </proxyCredentials>
+          </deploymentLocation>
+          <deploymentLocation id="openXml" location="">
+            <userCredentials useDefault="true" userName="" password="" />
+            <proxyCredentials useProxy="false" proxyServer="">
+              <userCredentials useDefault="true" userName="" password="" />
+            </proxyCredentials>
+          </deploymentLocation>
+          <deploymentLocation id="markdown" location="">
             <userCredentials useDefault="true" userName="" password="" />
             <proxyCredentials useProxy="false" proxyServer="">
               <userCredentials useDefault="true" userName="" password="" />
@@ -69,8 +81,8 @@
     <BuildLogFile />
     <HtmlHelp1xCompilerPath />
     <WorkingPath />
-    <BuildAssemblerVerbosity>AllMessages</BuildAssemblerVerbosity>
-    <HelpFileFormat>HtmlHelp1</HelpFileFormat>
+    <BuildAssemblerVerbosity>OnlyWarningsAndErrors</BuildAssemblerVerbosity>
+    <HelpFileFormat>HtmlHelp1, Website</HelpFileFormat>
     <IndentHtml>False</IndentHtml>
     <KeepLogFile>True</KeepLogFile>
     <DisableCodeBlockComponent>False</DisableCodeBlockComponent>
@@ -81,9 +93,43 @@
     <NamingMethod>Guid</NamingMethod>
     <Language>en-US</Language>
     <ContentPlacement>AboveNamespaces</ContentPlacement>
-    <VisibleItems>InheritedMembers, InheritedFrameworkMembers, Protected, ProtectedInternalAsProtected</VisibleItems>
+    <VisibleItems>InheritedMembers, InheritedFrameworkMembers, Protected, ProtectedInternalAsProtected, NonBrowsable</VisibleItems>
     <MaximumGroupParts>2</MaximumGroupParts>
     <NamespaceGrouping>False</NamespaceGrouping>
+    <SaveComponentCacheCapacity>0</SaveComponentCacheCapacity>
+    <TransformComponentArguments>
+      <Argument Key="logoFile" Value="" />
+      <Argument Key="logoHeight" Value="" />
+      <Argument Key="logoWidth" Value="" />
+      <Argument Key="logoAltText" Value="" />
+      <Argument Key="logoPlacement" Value="left" />
+      <Argument Key="logoAlignment" Value="left" />
+      <Argument Key="maxVersionParts" Value="" />
+      <Argument Key="defaultLanguage" Value="cs" />
+      <Argument Key="includeEnumValues" Value="true" />
+      <Argument Key="baseSourceCodeUrl" Value="https://github.com/EWSoftware/SHFB/blob/master/SHFB/Source/" />
+      <Argument Key="requestExampleUrl" Value="https://github.com/EWSoftware/SHFB/issues/new" />
+    </TransformComponentArguments>
+    <SourceCodeBasePath>..\..\</SourceCodeBasePath>
+    <WarnOnMissingSourceContext>True</WarnOnMissingSourceContext>
+    <HtmlSdkLinkType>Msdn</HtmlSdkLinkType>
+    <BinaryTOC>True</BinaryTOC>
+    <IncludeFavorites>False</IncludeFavorites>
+    <WebsiteSdkLinkType>Msdn</WebsiteSdkLinkType>
+    <WebsiteAdContent>&amp;lt%3bscript type=&amp;quot%3btext/javascript&amp;quot%3b&amp;gt%3b
+    function _dmBootstrap%28file%29 {
+        var _dma = document.createElement%28&amp;#39%3bscript&amp;#39%3b%29%3b
+        _dma.type = &amp;#39%3btext/javascript&amp;#39%3b%3b
+        _dma.async = true%3b
+        _dma.src = %28&amp;#39%3bhttps:&amp;#39%3b == document.location.protocol %3f &amp;#39%3bhttps://&amp;#39%3b : &amp;#39%3bhttp://&amp;#39%3b%29 + file%3b
+        %28document.getElementsByTagName%28&amp;#39%3bhead&amp;#39%3b%29[0] || document.getElementsByTagName%28&amp;#39%3bbody&amp;#39%3b%29[0]%29.appendChild%28_dma%29%3b
+    }
+    function _dmFollowup%28file%29 { if %28typeof DMAds === &amp;#39%3bundefined&amp;#39%3b%29 _dmBootstrap%28&amp;#39%3bcdn2.DeveloperMedia.com/a.min.js&amp;#39%3b%29%3b }
+    %28function %28%29 { _dmBootstrap%28&amp;#39%3bcdn1.DeveloperMedia.com/a.min.js&amp;#39%3b%29%3b setTimeout%28_dmFollowup, 2000%29%3b }%29%28%29%3b
+&amp;lt%3b/script&amp;gt%3b
+&amp;lt%3bdiv data-type=&amp;quot%3bad&amp;quot%3b data-publisher=&amp;quot%3bewsoftware.github.io&amp;quot%3b data-format=&amp;quot%3b728x90&amp;quot%3b data-zone=&amp;quot%3bHTMLtoMAML&amp;quot%3b&amp;gt%3b&amp;lt%3b/div&amp;gt%3b
+</WebsiteAdContent>
+    <AppendMarkdownFileExtensionsToUrls>False</AppendMarkdownFileExtensionsToUrls>
   </PropertyGroup>
   <!-- There are no properties for these two groups but they need to appear in
        order for Visual Studio to perform the build. -->
@@ -123,7 +169,9 @@
     <None Include="Content\ConversionRules\ConversionRulesElements\Remove.aml" />
   </ItemGroup>
   <ItemGroup>
-    <Tokens Include="Tokens.tokens" />
+    <Tokens Include="..\..\..\..\Documentation\SandcastleBuilder\CommonTokens.tokens">
+      <Link>CommonTokens.tokens</Link>
+    </Tokens>
   </ItemGroup>
   <!-- Import the SHFB build targets -->
   <Import Project="$(SHFBROOT)\SandcastleHelpFileBuilder.targets" />

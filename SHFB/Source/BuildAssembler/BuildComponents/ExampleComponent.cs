@@ -26,7 +26,7 @@ using Microsoft.Ddue.Tools.Snippets;
 using Sandcastle.Core.BuildAssembler;
 using Sandcastle.Core.BuildAssembler.BuildComponent;
 
-namespace Microsoft.Ddue.Tools
+namespace Microsoft.Ddue.Tools.BuildComponent
 {
     /// <summary>
     /// This build component is used to replace code references with snippets from a file
@@ -58,7 +58,6 @@ namespace Microsoft.Ddue.Tools
             new Dictionary<SnippetIdentifier, List<StoredSnippet>>();
 
         private XPathExpression selector;
-        private XmlNamespaceManager context = new CustomContext();
 
         private static Regex validSnippetReference = new Regex(@"^[^#\a\b\f\n\r\t\v]+#(\w+,)*\w+$");
 
@@ -233,7 +232,7 @@ namespace Microsoft.Ddue.Tools
                 }
             }
 
-            return (regions);
+            return regions;
         }
 
         /// <summary>
@@ -372,6 +371,7 @@ namespace Microsoft.Ddue.Tools
                 WriteMessage(MessageLevel.Info, "Loaded {0} colorization rules for the language '{1}'.", rules.Count, language);
             }
 
+            CustomContext context = new CustomContext();
             context.AddNamespace("ddue", "http://ddue.schemas.microsoft.com/authoring/2003/5");
 
             selector = XPathExpression.Compile("//ddue:codeReference");

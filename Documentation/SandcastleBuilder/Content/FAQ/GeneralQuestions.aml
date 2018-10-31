@@ -7,6 +7,18 @@
 			<autoOutline lead="none" excludeRelatedTopics="true" />
 		</introduction>
 
+		<section address="WhySandcastle">
+			<title>Why is it called Sandcastle?</title>
+			<content>
+				<!-- Ignore Spelling: Anand Whidbey -->
+				<para>From Anand Raman:  When Microsoft shipped Visual Studio 2005 (code named Whidbey) Microsoft
+internally used a "beach theme" code base called Coronado to build and ship the conceptual and managed reference
+content.  As a part of this beach theme, the managed reference reflection and build engine portion of the
+Coronado code base was called Sandcastle.  Internally, Sandcastle was used by developers across teams to produce
+documentation for their XML comments.</para>
+			</content>
+		</section>
+		
 		<section address="GettingStarted">
 			<title>How do I use Sandcastle and the help file builder?</title>
 			<content>
@@ -30,7 +42,12 @@ that topic contains information about how to find features or equivalent functio
 		<section address="WebProjects">
 			<title>How do I document a web application or a website project?</title>
 			<content>
-				<para>See the  <link xlink:href="94c7f744-9b90-4254-93ab-9b15f47d9f42" /> topic for details.</para>
+				<para> See the <externalLink>
+<linkText>Documenting Web Projects</linkText>
+<linkAlternateText>Documenting Web Projects</linkAlternateText>
+<linkUri>https://EWSoftware.GitHub.io/EWSoftwareCodeDom</linkUri>
+<linkTarget>_blank</linkTarget>
+</externalLink> help file for details.</para>
 			</content>
 		</section>
 		
@@ -42,6 +59,34 @@ such as application code or a page in an external website?</title>
 the <link xlink:href="1b2dff59-92cc-4578-b261-f3849f30c26c#NamingMethod">NamingMethod</link> help topic for
 examples that show how to open specific topics based on the selected naming method from application code and how
 to determine the URL for a website link.</para>
+			</content>
+		</section>
+
+		<section address="BuildEvents">
+			<title>Why don't my project's pre-build and/or post-build events evaluate and run correctly?</title>
+			<content>
+				<para>Pre-build and post-build events were not always supported in help file builder projects.  Older
+projects created before they were supported do not contain the necessary properties and they will be incorrectly
+added to the first property group if modified in the property pages.</para>
+
+				<para>The pre-build and post-build event properties need to be added in a new property group at the very
+end of the project after the help file builder target file import as shown in the following example:</para>
+
+<code language="xml" title=" ">
+&lt;Import Project="$(SHFBROOT)\SandcastleHelpFileBuilder.targets" /&gt;
+
+&lt;PropertyGroup&gt;
+	&lt;PreBuildEvent&gt;ECHO "Hello from the pre-build event"&lt;/PreBuildEvent&gt;
+	&lt;PostBuildEvent&gt;ECHO "Hello from the post-build event"&lt;/PostBuildEvent&gt;
+	&lt;RunPostBuildEvent&gt;OnBuildSuccess&lt;/RunPostBuildEvent&gt;
+&lt;/PropertyGroup&gt;
+</code>
+
+				<para>This is necessary to allow the <codeInline>PreBuildEvent</codeInline> and
+<codeInline>PostBuildEvent</codeInline> targets to be evaluated correctly.  They are imported from
+<localUri>Microsoft.Common.Targets</localUri>.  You can edit the help file builder project in a text editor and
+move the properties to the end of the file manually to correct the problem.</para>
+			
 			</content>
 		</section>
 

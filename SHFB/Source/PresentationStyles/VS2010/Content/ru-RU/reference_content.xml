@@ -1,3 +1,4 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
 <content xml:space="preserve">
 <!-- Translations provided by Sergey Zhurikhin -->
 
@@ -88,8 +89,6 @@
 	<item id="indexEntry_delegate">{0} - делегат</item>
 	<item id="indexEntry_enumeration">{0} - перечисление</item>
   <item id="indexEntry_enumerationMember">{0} - член перечисления</item>
-  <item id="indexEntry_aboutType">{0}, о {0}</item>
-  <item id="indexEntry_derivedTypes">{0}, производные типы</item>
   <item id="indexEntry_members">{0}, все члены</item>
   <item id="indexEntry_methods">{0}, методы</item>
   <!-- index entry for operator list topic that has [operators + no type conversions] -->
@@ -200,10 +199,6 @@
   <item id="text_staticNotThreadSafe">Статические члены этого типа, являются небезопасными для многопоточных операций. </item>
   <item id="text_instanceThreadSafe">Члены экземпляра этого типа, являются безопасными для многопоточных операций. </item>
   <item id="text_instanceNotThreadSafe">Члены экземпляра этого типа, являются небезопасными для многопоточных операций. </item>
-  
-  <item id="text_NotesForImplementers">Примечания для реализующих объектов</item>
-  <item id="text_NotesForCallers">Примечания для вызывающих объектов</item>
-  <item id="text_NotesForInheritors">Примечания для наследников</item>
   
   <!-- boilerplate intro to member list tables -->
   <item id="genericExposedMembersTableText">Универсальный тип {0} предоставляет следующие члены.</item>
@@ -383,7 +378,7 @@
   <item id="text_contravariant">Этот параметр типа является контрвариантным. Это означает, что можно использовать либо указанный тип, либо менее производный тип. </item>
   <item id="text_variance">Дополнительные сведения о ковариации и контрвариации см. в разделе <a href="http://msdn.microsoft.com/ru-ru/library/ee207183.aspx" target="_blank">Ковариация и контравариация в универсальных шаблонах</a>.</item>
   
-  <!-- Non Cls Compliant boilerplate text-->
+  <!-- Non-CLS Compliant boilerplate text-->
   <item id="boilerplate_NotClsCompliant">Этот интерфейс API CLS-несовместим.</item>
   <item id="boilerplate_AltClsCompliant">CLS-совместимая альтернатива - {0}.</item>
   
@@ -549,4 +544,8 @@
   <item id="SMCMissingTag"><p style="color: #dc143c; font-size: 8.5pt; font-weight: bold;">[&lt;{0}&gt; отсутствует в документации для "{1}"]</p></item>
   <item id="SMCMissingParamTag"><p style="color: #dc143c; font-size: 8.5pt; font-weight: bold;">[&lt;{0} name="{1}"/&gt; отсутствует в документации для "{2}"]</p></item>
   <item id="SMCMissingIncludeTarget"><p style="color: #dc143c; font-size: 8.5pt; font-weight: bold;">[&lt;include&gt; отсутствует в '{0}'.  Файл: '{1}' Путь: '{2}']</p></item>
+
+	<!-- View Source link text -->
+	<item id="sourceCodeLinkText">View Source</item>
+	<item id="sourceCodeLinkTitle">View the source code</item>
 </content>

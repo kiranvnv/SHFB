@@ -18,6 +18,7 @@
 // without having to add additional reference link data to the help project.
 // 03/28/2015 - EFW - Changed the href-format attribute to a nested hrefFormat element.
 // 06/05/2015 - EFW - Removed support for the Help 2 Index and LocalOrIndex link types
+// 03/24/2017 - EFW - Updated to try and resolve missing overload IDs to an equivalent non-overload method ID
 
 using System;
 using System.Collections.Generic;
@@ -33,7 +34,7 @@ using Microsoft.Ddue.Tools.Targets;
 using Sandcastle.Core.BuildAssembler;
 using Sandcastle.Core.BuildAssembler.BuildComponent;
 
-namespace Microsoft.Ddue.Tools
+namespace Microsoft.Ddue.Tools.BuildComponent
 {
     /// <summary>
     /// This build component is used to resolve links to reference topics
@@ -52,7 +53,7 @@ namespace Microsoft.Ddue.Tools
             /// <inheritdoc />
             public override BuildComponentCore Create()
             {
-                return new ResolveReferenceLinksComponent(base.BuildAssembler);
+                return new ResolveReferenceLinksComponent(this.BuildAssembler);
             }
         }
         #endregion
@@ -166,7 +167,7 @@ namespace Microsoft.Ddue.Tools
             XPathNodeIterator targetsNodes = configuration.Select("targets");
 
 #if DEBUG
-            base.WriteMessage(MessageLevel.Diagnostic, "Loading reference link target info");
+            this.WriteMessage(MessageLevel.Diagnostic, "Loading reference link target info");
 
             DateTime startLoad = DateTime.Now;
 #endif
@@ -176,11 +177,11 @@ namespace Microsoft.Ddue.Tools
                 attrValue = targetsNode.GetAttribute("type", String.Empty);
 
                 if(String.IsNullOrEmpty(attrValue))
-                    base.WriteMessage(MessageLevel.Error, "Each targets element must have a type attribute " +
+                    this.WriteMessage(MessageLevel.Error, "Each targets element must have a type attribute " +
                         "that specifies which type of links to create");
 
                 if(!Enum.TryParse<ReferenceLinkType>(attrValue, true, out type))
-                    base.WriteMessage(MessageLevel.Error, "'{0}' is not a supported reference link type",
+                    this.WriteMessage(MessageLevel.Error, "'{0}' is not a supported reference link type",
                         attrValue);
 
                 // Check for shared instance by ID.  If not there, create it and add it.
@@ -199,7 +200,7 @@ namespace Microsoft.Ddue.Tools
 
 #if DEBUG
             TimeSpan loadTime = (DateTime.Now - startLoad);
-            base.WriteMessage(MessageLevel.Diagnostic, "Load time: {0} seconds", loadTime.TotalSeconds);
+            this.WriteMessage(MessageLevel.Diagnostic, "Load time: {0} seconds", loadTime.TotalSeconds);
 
             // Dump targets for comparison to other versions
 //            targets.DumpTargetDictionary(Path.GetFullPath("TargetDictionary.xml"));
@@ -208,12 +209,12 @@ namespace Microsoft.Ddue.Tools
 //            targets.SerializeDictionary(Directory.GetCurrentDirectory());
 #endif
             // Getting the count from a database cache can be expensive so only report it if it will be seen
-            if(base.BuildAssembler.VerbosityLevel == MessageLevel.Info)
-                base.WriteMessage(MessageLevel.Info, "{0} total reference link targets", targets.Count);
+            if(this.BuildAssembler.VerbosityLevel == MessageLevel.Info)
+                this.WriteMessage(MessageLevel.Info, "{0} total reference link targets", targets.Count);
 
             if(targets.NeedsMsdnResolver)
             {
-                base.WriteMessage(MessageLevel.Info, "Creating MSDN URL resolver");
+                this.WriteMessage(MessageLevel.Info, "Creating MSDN URL resolver");
 
                 msdnResolver = this.CreateMsdnResolver(configuration);
 
@@ -255,6 +256,32 @@ namespace Microsoft.Ddue.Tools
 
                 bool targetFound = targets.TryGetValue(targetId, out target, out type);
 
+                // If it's an overload ID that wasn't found, it's possible that the overloads got excluded.
+                // As such, see if we can find a match for a method using the same ID regardless of any
+                // parameters.
+                if(!targetFound && targetId.StartsWith("Overload:", StringComparison.Ordinal) ||
+                  targetId.StartsWith("O:", StringComparison.Ordinal))
+                {
+                    string methodTargetId = "M:" + targetId.Substring(targetId.IndexOf(':') + 1);
+                    methodTargetId = targets.Keys.FirstOrDefault(k => k.StartsWith(methodTargetId));
+
+                    if(methodTargetId != null)
+                    {
+                        targetId = methodTargetId;
+                        targetFound = targets.TryGetValue(targetId, out target, out type);
+                        options |= DisplayOptions.ShowParameters;
+
+                        // Don't use the content as it may not be appropriate for the method.  The default is
+                        // "{0} Overload" which no longer applies.  Instead we'll show the method name and
+                        // its parameters.
+                        if(link.DisplayTarget.Equals("format", StringComparison.OrdinalIgnoreCase))
+                        {
+                            link.DisplayTarget = null;
+                            link.Contents = null;
+                        }
+                    }
+                }
+
                 // If not found and it starts with "System." or "Microsoft." we'll go with the assumption that
                 // it's part of a Microsoft class library that is not part of the core framework but does have
                 // documentation available on MSDN.  Worst case it doesn't and we get an unresolved link warning
@@ -277,7 +304,7 @@ namespace Microsoft.Ddue.Tools
                 {
                     // If not being rendered as a link, don't report a warning
                     if(link.RenderAsLink && targetId != key)
-                        base.WriteMessage(key, MessageLevel.Warn, "Unknown reference link target '{0}'.", targetId);
+                        this.WriteMessage(key, MessageLevel.Warn, "Unknown reference link target '{0}'.", targetId);
 
                     // !EFW - Turn off the Show Parameters option for unresolved elements except methods.  If
                     // not, it outputs an empty "()" after the member name which looks odd.
@@ -354,11 +381,11 @@ namespace Microsoft.Ddue.Tools
                         {
                             // If the web service failed, report the reason
                             if(msdnResolver.IsDisabled)
-                                base.WriteMessage(key, MessageLevel.Warn, "MSDN web service failed.  No " +
+                                this.WriteMessage(key, MessageLevel.Warn, "MSDN web service failed.  No " +
                                     "further look ups will be performed for this build.\r\nReason: {0}",
                                     msdnResolver.DisabledReason);
                             else
-                                base.WriteMessage(key, MessageLevel.Warn, "MSDN URL not found for target '{0}'.",
+                                this.WriteMessage(key, MessageLevel.Warn, "MSDN URL not found for target '{0}'.",
                                     targetId);
 
                             type = ReferenceLinkType.None;
@@ -424,7 +451,7 @@ namespace Microsoft.Ddue.Tools
                             Reference reference = TextReferenceUtilities.CreateReference(targetId);
 
                             if(reference is InvalidReference)
-                                base.WriteMessage(key, MessageLevel.Warn,
+                                this.WriteMessage(key, MessageLevel.Warn,
                                     "Invalid reference link target '{0}'.", targetId);
 
                             resolver.WriteReference(reference, options, writer);
@@ -572,7 +599,7 @@ namespace Microsoft.Ddue.Tools
                 msdnIdCacheFile = node.GetAttribute("path", String.Empty);
 
                 if(String.IsNullOrWhiteSpace(msdnIdCacheFile))
-                    base.WriteMessage(MessageLevel.Error, "You must specify a path attribute value on the " +
+                    this.WriteMessage(MessageLevel.Error, "You must specify a path attribute value on the " +
                         "msdnContentIdCache element.");
 
                 // Create the folder if it doesn't exist
@@ -586,7 +613,7 @@ namespace Microsoft.Ddue.Tools
                 if(!File.Exists(msdnIdCacheFile))
                 {
                     // Logged as a diagnostic message since looking up all IDs can significantly slow the build
-                    base.WriteMessage(MessageLevel.Diagnostic, "The MSDN content ID cache '" + msdnIdCacheFile +
+                    this.WriteMessage(MessageLevel.Diagnostic, "The MSDN content ID cache '" + msdnIdCacheFile +
                         "' does not exist yet.  All IDs will be looked up in this build which will slow it down.");
 
                     newResolver = new MsdnResolver();
@@ -598,7 +625,7 @@ namespace Microsoft.Ddue.Tools
                         BinaryFormatter bf = new BinaryFormatter();
                         newResolver = new MsdnResolver((IDictionary<string, string>)bf.Deserialize(fs), false);
 
-                        base.WriteMessage(MessageLevel.Info, "Loaded {0} cached MSDN content ID entries",
+                        this.WriteMessage(MessageLevel.Info, "Loaded {0} cached MSDN content ID entries",
                             newResolver.MsdnContentIdCache.Count);
                     }
             }
@@ -615,9 +642,9 @@ namespace Microsoft.Ddue.Tools
         /// serialization if new entries were added and it loaded the cache file.</remarks>
         public virtual void UpdateMsdnContentIdCache()
         {
-            if(msdnIdCacheFile != null && msdnResolver != null && msdnResolver.CacheItemsAdded)
+            if(msdnIdCacheFile != null && msdnResolver != null && MsdnResolver.CacheItemsAdded != 0)
             {
-                base.WriteMessage(MessageLevel.Info, "MSDN content ID cache updated.  Saving new information to " +
+                this.WriteMessage(MessageLevel.Info, "MSDN content ID cache updated.  Saving new information to " +
                     msdnIdCacheFile);
 
                 try
@@ -629,14 +656,15 @@ namespace Microsoft.Ddue.Tools
                         bf.Serialize(fs, msdnResolver.MsdnContentIdCache);
                     }
 
-                    base.WriteMessage(MessageLevel.Diagnostic, "New MSDN content ID cache size: {0} entries",
+                    this.WriteMessage(MessageLevel.Diagnostic, "{0} entries added to the MSDN content ID " +
+                        "cache.  New cache size: {1} entries", MsdnResolver.CacheItemsAdded,
                         msdnResolver.MsdnContentIdCache.Count);
                 }
                 catch(IOException ex)
                 {
                     // Most likely it couldn't access the file.  We'll issue a warning but will continue with
                     // the build.
-                    base.WriteMessage(MessageLevel.Warn, "Unable to create MSDN content ID cache file.  It " +
+                    this.WriteMessage(MessageLevel.Warn, "Unable to create MSDN content ID cache file.  It " +
                         "will be created or updated on a subsequent build: " + ex.Message);
                 }
             }
@@ -660,7 +688,7 @@ namespace Microsoft.Ddue.Tools
             }
             catch(Exception ex)
             {
-                base.WriteMessage(MessageLevel.Error, BuildComponentUtilities.GetExceptionMessage(ex));
+                this.WriteMessage(MessageLevel.Error, BuildComponentUtilities.GetExceptionMessage(ex));
             }
 
             return d;

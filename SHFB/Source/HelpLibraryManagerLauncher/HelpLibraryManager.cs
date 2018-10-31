@@ -2,8 +2,8 @@
 // System  : Help Library Manager Launcher
 // File    : HelpLibraryManager.cs
 // Author  : Eric Woodruff  (Eric@EWoodruff.us)
-// Updated : 03/24/2015
-// Note    : Copyright 2010-2015, Eric Woodruff, All rights reserved
+// Updated : 08/29/2016
+// Note    : Copyright 2010-2016, Eric Woodruff, All rights reserved
 // Compiler: Microsoft Visual C#
 //
 // This file contains a class used to interact with the Help Library Manager.
@@ -20,6 +20,8 @@
 // 10/05/2012  EFW  Added support for Help Viewer 2.0
 // 03/03/2014  EFW  Fixed FindLocaleFor() so that it works properly when multiple languages are present
 //===============================================================================================================
+
+// Ignore Spelling: Fehr runas
 
 using System;
 using System.Collections.Generic;
@@ -145,6 +147,9 @@ namespace SandcastleBuilder.MicrosoftHelpViewer
 
                 case 2:     // Visual Studio 2015
                     return "VisualStudio14";
+
+                case 3:     // Visual Studio 2016
+                    return "VisualStudio15";
 
                 default:
                     return null;

@@ -13,8 +13,10 @@
 // 12/10/2013 - EFW - Added MSBuild task support.
 // 10/16/2014 - EFW - Added support for WindowsStoreAndPhoneNamer.
 // 05/09/2015 - EFW - Removed the deprecated /internal command line option and platform configuration options
+// 08/23/2016 - EFW - Added support for writing out source code context
 
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -26,6 +28,7 @@ using System.Compiler;
 
 using Sandcastle.Core;
 using Sandcastle.Core.CommandLine;
+using Sandcastle.Core.Reflection;
 
 using Microsoft.Ddue.Tools.Reflection;
 
@@ -97,6 +100,7 @@ namespace Microsoft.Ddue.Tools
 
             // Load the configuration file
             XPathDocument config;
+            XPathNavigator configNav;
             string configDirectory = ComponentUtilities.ToolsFolder,
                 configFile = Path.Combine(ComponentUtilities.ToolsFolder, "MRefBuilder.config");
 
@@ -109,6 +113,7 @@ namespace Microsoft.Ddue.Tools
             try
             {
                 config = new XPathDocument(configFile);
+                configNav = config.CreateNavigator();
             }
             catch(IOException e)
             {
@@ -130,7 +135,7 @@ namespace Microsoft.Ddue.Tools
             }
 
             // Adjust the target platform
-            var platformNode = config.CreateNavigator().SelectSingleNode("/configuration/dduetools/platform");
+            var platformNode = configNav.SelectSingleNode("/configuration/dduetools/platform");
 
             if(platformNode == null)
             {
@@ -143,8 +148,17 @@ namespace Microsoft.Ddue.Tools
             version = platformNode.GetAttribute("version", String.Empty);
             framework = platformNode.GetAttribute("framework", String.Empty);
 
+            // Get component locations used to find additional reflection data definition files
+            List<string> componentFolders = new List<string>();
+            var locations = configNav.SelectSingleNode("/configuration/dduetools/componentLocations");
+
+            if(locations != null)
+                foreach(XPathNavigator folder in locations.Select("location/@folder"))
+                    if(!String.IsNullOrWhiteSpace(folder.Value) && Directory.Exists(folder.Value))
+                        componentFolders.Add(folder.Value);
+
             if(!String.IsNullOrEmpty(framework) && !String.IsNullOrEmpty(version))
-                TargetPlatform.SetFrameworkInformation(framework, version);
+                TargetPlatform.SetFrameworkInformation(framework, version, componentFolders);
             else
             {
                 ConsoleApplication.WriteMessage(LogLevel.Error, "Unknown target framework " +
@@ -155,14 +169,16 @@ namespace Microsoft.Ddue.Tools
             // Create an API member namer
             ApiNamer namer;
 
-            // Apply a different naming method to assemblies using the Windows Store or Windows Phone frameworks
-            if(framework == ".NETCore" || framework == ".NETPortable" || framework == "WindowsPhone" ||
-              framework == "WindowsPhoneApp")
+            // Apply a different naming method to assemblies using these frameworks
+            if(framework == PlatformType.DotNetCore || framework == PlatformType.DotNetPortable ||
+              framework == PlatformType.WindowsPhone || framework == PlatformType.WindowsPhoneApp)
+            {
                 namer = new WindowsStoreAndPhoneNamer();
+            }
             else
                 namer = new OrcasNamer();
 
-            XPathNavigator namerNode = config.CreateNavigator().SelectSingleNode("/configuration/dduetools/namer");
+            XPathNavigator namerNode = configNav.SelectSingleNode("/configuration/dduetools/namer");
 
             if(namerNode != null)
             {
@@ -235,7 +251,7 @@ namespace Microsoft.Ddue.Tools
 
             // Create a resolver
             AssemblyResolver resolver = new AssemblyResolver();
-            XPathNavigator resolverNode = config.CreateNavigator().SelectSingleNode("/configuration/dduetools/resolver");
+            XPathNavigator resolverNode = configNav.SelectSingleNode("/configuration/dduetools/resolver");
 
             if(resolverNode != null)
             {
@@ -341,12 +357,25 @@ namespace Microsoft.Ddue.Tools
 
             try
             {
-                // Create a builder
-                ApiVisitor = new ManagedReflectionWriter(output, namer, resolver,
-                    new ApiFilter(config.CreateNavigator().SelectSingleNode("/configuration/dduetools")));
+                // Create a writer
+                string sourceCodeBasePath = (string)configNav.Evaluate(
+                    "string(/configuration/dduetools/sourceContext/@basePath)");
+                bool warnOnMissingContext = false;
+
+                if(!String.IsNullOrWhiteSpace(sourceCodeBasePath))
+                {
+                    warnOnMissingContext = (bool)configNav.Evaluate(
+                        "boolean(/configuration/dduetools/sourceContext[@warnOnMissingSourceContext='true'])");
+                }
+                else
+                    ConsoleApplication.WriteMessage(LogLevel.Info, "No source code context base path " +
+                        "specified.  Source context information is unavailable.");
+
+                ApiVisitor = new ManagedReflectionWriter(output, namer, resolver, sourceCodeBasePath,
+                    warnOnMissingContext, new ApiFilter(configNav.SelectSingleNode("/configuration/dduetools")));
 
                 // Register add-ins to the builder
-                XPathNodeIterator addinNodes = config.CreateNavigator().Select("/configuration/dduetools/addins/addin");
+                XPathNodeIterator addinNodes = configNav.Select("/configuration/dduetools/addins/addin");
 
                 foreach(XPathNavigator addinNode in addinNodes)
                 {
@@ -466,8 +495,8 @@ namespace Microsoft.Ddue.Tools
                     ConsoleApplication.WriteMessage(LogLevel.Error, "MRefBuilder task canceled");
                 else
                     ConsoleApplication.WriteMessage(LogLevel.Info, "Wrote information on {0} namespaces, " +
-                        "{1} types, and {2} members", ApiVisitor.Namespaces.Count(), ApiVisitor.Types.Count(),
-                        ApiVisitor.Members.Count());
+                        "{1} types, and {2} members", ApiVisitor.NamespaceCount, ApiVisitor.TypeCount,
+                        ApiVisitor.MemberCount);
             }
             finally
             {

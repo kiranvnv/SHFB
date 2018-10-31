@@ -32,14 +32,12 @@ namespace SandcastleBuilder.Gui.ContentEditors
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(ProjectPropertiesWindow));
             this.statusBarTextProvider1 = new SandcastleBuilder.Utils.Controls.StatusBarTextProvider(this.components);
             this.tvPropertyPages = new System.Windows.Forms.TreeView();
-            this.pnlPropertyPages = new System.Windows.Forms.Panel();
             this.SuspendLayout();
             // 
             // tvPropertyPages
             // 
             this.tvPropertyPages.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
             | System.Windows.Forms.AnchorStyles.Left)));
-            this.tvPropertyPages.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.tvPropertyPages.FullRowSelect = true;
             this.tvPropertyPages.HideSelection = false;
             this.tvPropertyPages.Location = new System.Drawing.Point(12, 12);
@@ -47,30 +45,18 @@ namespace SandcastleBuilder.Gui.ContentEditors
             this.tvPropertyPages.ShowLines = false;
             this.tvPropertyPages.ShowPlusMinus = false;
             this.tvPropertyPages.ShowRootLines = false;
-            this.tvPropertyPages.Size = new System.Drawing.Size(181, 531);
+            this.tvPropertyPages.Size = new System.Drawing.Size(208, 531);
             this.statusBarTextProvider1.SetStatusBarText(this.tvPropertyPages, "Select a property category");
             this.tvPropertyPages.TabIndex = 0;
             this.tvPropertyPages.BeforeSelect += new System.Windows.Forms.TreeViewCancelEventHandler(this.tvPropertyPages_BeforeSelect);
             this.tvPropertyPages.AfterSelect += new System.Windows.Forms.TreeViewEventHandler(this.tvPropertyPages_AfterSelect);
             // 
-            // pnlPropertyPages
-            // 
-            this.pnlPropertyPages.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
-            | System.Windows.Forms.AnchorStyles.Left) 
-            | System.Windows.Forms.AnchorStyles.Right)));
-            this.pnlPropertyPages.AutoScroll = true;
-            this.pnlPropertyPages.Location = new System.Drawing.Point(199, 12);
-            this.pnlPropertyPages.Name = "pnlPropertyPages";
-            this.pnlPropertyPages.Size = new System.Drawing.Size(571, 531);
-            this.statusBarTextProvider1.SetStatusBarText(this.pnlPropertyPages, "Category properties");
-            this.pnlPropertyPages.TabIndex = 1;
-            this.pnlPropertyPages.SizeChanged += new System.EventHandler(this.pnlPropertyPages_SizeChanged);
-            // 
             // ProjectPropertiesWindow
             // 
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Inherit;
+            this.AutoScroll = true;
+            this.AutoScrollMargin = new System.Drawing.Size(10, 10);
             this.ClientSize = new System.Drawing.Size(782, 555);
-            this.Controls.Add(this.pnlPropertyPages);
             this.Controls.Add(this.tvPropertyPages);
             this.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.HideOnClose = true;
@@ -89,6 +75,5 @@ namespace SandcastleBuilder.Gui.ContentEditors
 
         private SandcastleBuilder.Utils.Controls.StatusBarTextProvider statusBarTextProvider1;
         private System.Windows.Forms.TreeView tvPropertyPages;
-        private System.Windows.Forms.Panel pnlPropertyPages;
     }
 }

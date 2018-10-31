@@ -16,7 +16,7 @@ using System.Xml.XPath;
 using Sandcastle.Core.BuildAssembler;
 using Sandcastle.Core.BuildAssembler.BuildComponent;
 
-namespace Microsoft.Ddue.Tools
+namespace Microsoft.Ddue.Tools.BuildComponent
 {
     /// <summary>
     /// This component serves as a debugging aid.  It dumps the current document to the message log
@@ -44,6 +44,7 @@ namespace Microsoft.Ddue.Tools
         //=====================================================================
 
         private string xpathFormat = "/";
+
         #endregion
 
         #region Constructor

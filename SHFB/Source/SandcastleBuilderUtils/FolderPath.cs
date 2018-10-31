@@ -19,7 +19,7 @@
 // Version     Date     Who  Comments
 // ============================================================================
 // 1.3.4.0  12/29/2006  EFW  Created the code
-// 1.8.0.0  06/23/2008  EFW  Reworked BasePath support to make it useable in
+// 1.8.0.0  06/23/2008  EFW  Reworked BasePath support to make it usable in
 //                           a multi-project environment like Visual Studio.
 //=============================================================================
 
@@ -59,7 +59,7 @@ namespace SandcastleBuilder.Utils
         /// <p/>If set to a null or empty string, the folder path is cleared
         /// and is considered to be undefined.</value>
         /// <example>
-        /// <code lang="cs">
+        /// <code language="cs">
         /// FolderPath path = new FolderPath();
         /// 
         /// // Set it to a relative path
@@ -71,7 +71,7 @@ namespace SandcastleBuilder.Utils
         /// // Set it to a path based on an environment variable
         /// path.Path = @"%HOMEDRIVE%%HOMEPATH%\Favorites\";
         /// </code>
-        /// <code lang="vbnet">
+        /// <code language="vbnet">
         /// Dim path As New FolderPath()
         ///
         /// ' Set it to a relative path

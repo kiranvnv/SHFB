@@ -1,3 +1,4 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
 <content xml:space="preserve" xmlns:MSHelp="http://msdn.microsoft.com/mshelp">
 	<!-- Translations provided by Michael Buchner -->
 
@@ -19,14 +20,15 @@
   <!-- header and footer -->
 	<item id="header"><span class="introStyle"></span></item>
 	<item id="footer_text"></item>
-  
+	<item id="websiteAdContent" />
+
   <!-- freshness date -->
   <item id="boilerplate_UpdateTitle"><span class="introStyle">Aktualisiert: {0}</span></item>
-  <!-- if the TransformComponent of the BuildAssembler config file has the argument: 
+  <!-- if the TransformComponent of the BuildAssembler config file has the argument:
              argument key="changeHistoryOptions" value="showDefaultFreshnessDate"
        the "text_defaultFreshnessDate" item is used as the default freshness date for topics that don't have a Change History table. -->
   <item id="text_defaultFreshnessDate"/>
-  
+
   <!-- topic title -->
   <item id="boilerplate_pageTitle">{0}</item>
 
@@ -40,6 +42,9 @@
 	<item id="alert_title_visualC#">C# Hinweis</item>
 	<item id="alert_title_visualC++">C++ Hinweis</item>
 	<item id="alert_title_visualJ#">J# Hinweis</item>
+	<item id="text_NotesForImplementers">Hinweise an Implementierer</item>
+	<item id="text_NotesForCallers">Hinweise an Anrufer</item>
+	<item id="text_NotesForInheritors">Hinweise an Erben</item>
 
 	<!-- alert alt text -->
 	<item id="alert_altText_tip">Tipp</item>
@@ -75,6 +80,7 @@
 	<item id="inline_dynamicLink_separatorText"> und </item>
   
 	<!-- Development language and code snippet titles for languages without a syntax generator -->
+	<item id="devlang_batch">Batch Script</item>
 	<item id="devlang_HTML">HTML</item>
 	<item id="devlang_PShell">PowerShell</item>
 	<item id="devlang_Python">Python</item>
@@ -86,6 +92,7 @@
 	<item id="noCodeExample"><p>No code example is currently available or this language may not be supported.</p></item>
 
 	<!-- Development language metadata values for languages without a syntax generator -->
+	<item id="metaLang_batch">Batch Script</item>
 	<item id="metaLang_HTML">HTML</item>
 	<item id="metaLang_PShell">PowerShell</item>
 	<item id="metaLang_Python">Python</item>
@@ -101,6 +108,7 @@
   <item id="devlang_trueKeyword"><span class="keyword">true</span> (<span class="keyword">True</span> in Visual Basic)</item>
   <item id="devlang_falseKeyword"><span class="keyword">false</span> (<span class="keyword">False</span> in Visual Basic)</item>
   <item id="devlang_abstractKeyword"><span class="keyword">abstract</span> (<span class="keyword">MustInherit</span> in Visual Basic)</item>
+  <item id="devlang_sealedKeyword"><span class="keyword">sealed</span> (<span class="keyword">NotInheritable</span> in Visual Basic)</item>
   <item id="devlang_asyncKeyword"><span class="keyword">async</span> (<span class="keyword">Async</span> in Visual Basic)</item>
   <item id="devlang_awaitKeyword"><span class="keyword">await</span> (<span class="keyword">Await</span> in Visual Basic)</item>
   <item id="devlang_asyncAwaitKeyword"><span class="keyword">async</span>/<span class="keyword">await</span> (<span class="keyword">Async</span>/<span class="keyword">Await</span> in Visual Basic)</item>

@@ -16,6 +16,8 @@
 
 using System.Xml.XPath;
 
+using Microsoft.Ddue.Tools.BuildComponent;
+
 namespace Microsoft.Ddue.Tools.Targets
 {
     /// <summary>
@@ -23,6 +25,11 @@ namespace Microsoft.Ddue.Tools.Targets
     /// </summary>
     public class ArtTarget
     {
+        /// <summary>
+        /// This is used to get or set the ID used to identify the file
+        /// </summary>
+        public string Id { get; set; }
+
         /// <summary>
         /// This is used to get or set the input path where the source file is located
         /// </summary>

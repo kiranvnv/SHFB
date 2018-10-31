@@ -2,8 +2,8 @@
 // System  : Sandcastle Tools - Sandcastle Tools Core Class Library
 // File    : ComponentUtilities.cs
 // Author  : Eric Woodruff  (Eric@EWoodruff.us)
-// Updated : 05/27/2015
-// Note    : Copyright 2007-2015, Eric Woodruff, All rights reserved
+// Updated : 12/03/2017
+// Note    : Copyright 2007-2017, Eric Woodruff, All rights reserved
 // Compiler: Microsoft Visual C#
 //
 // This file contains a class containing properties and methods used to locate and work with build components,
@@ -29,6 +29,8 @@
 // 08/05/2014  EFW  Added support for getting a list of syntax generator resource item files
 //===============================================================================================================
 
+// Ignore Spelling: allbutusage
+
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.Composition.Hosting;
@@ -38,6 +40,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Xml;
 using System.Xml.Linq;
 
@@ -57,6 +60,7 @@ namespace Sandcastle.Core
         private static string toolsFolder, componentsFolder;
 
         private static Regex reSyntaxSplitter = new Regex(",\\s*");
+        private static List<CultureInfo> supportedLanguages;
 
         #endregion
 
@@ -95,9 +99,36 @@ namespace Sandcastle.Core
         /// </summary>
         /// <value>This returns "Standard" to add the standard C#, VB.NET and C++ syntax filter to each API
         /// topic.</value>
-        public static string DefaultSyntaxFilter
+        public static string DefaultSyntaxFilter => "Standard";
+
+        /// <summary>
+        /// This read-only property returns a list of languages supported by the help file builder presentation
+        /// styles.
+        /// </summary>
+        /// <value>The available language resources are determined by seeing what stop word list translations are
+        /// available.</value>
+        public static IEnumerable<CultureInfo> SupportedLanguages
         {
-            get { return "Standard"; }
+            get
+            {
+                if(supportedLanguages == null)
+                {
+                    string name = Path.Combine(ComponentUtilities.ToolsFolder, @"PresentationStyles\Shared\StopWordList");
+
+                    try
+                    {
+                        supportedLanguages = Directory.EnumerateFiles(name, "*.txt").Select(
+                            f => new CultureInfo(Path.GetFileNameWithoutExtension(f))).OrderBy(c => c.DisplayName).ToList();
+                    }
+                    catch
+                    {
+                        // Ignore any errors, just return a default list with the en-US language
+                        supportedLanguages = new List<CultureInfo> { new CultureInfo("en-US") };
+                    }
+                }
+
+                return supportedLanguages;
+            }
         }
         #endregion
 
@@ -184,6 +215,8 @@ namespace Sandcastle.Core
         /// plug-ins, presentation styles, and BuildAssembler components and syntax generators).
         /// </summary>
         /// <param name="folders">An enumerable list of additional folders to search recursively for components.</param>
+        /// <param name="cancellationToken">An optional cancellation token or null if not supported by the caller.</param>
+        /// <returns>The a composition container that contains all of the available components</returns>
         /// <remarks>The following folders are searched in the following order.  If the given folder has not been
         /// specified or does not exist, it is ignored.
         /// 
@@ -202,19 +235,20 @@ namespace Sandcastle.Core
         /// duplicate component IDs across the assemblies found.  Only the first component for a unique
         /// ID will be used.  As such, assemblies in a folder with a higher search precedence can override
         /// copies in folders lower in the search order.</remarks>
-        public static CompositionContainer CreateComponentContainer(IEnumerable<string> folders)
+        public static CompositionContainer CreateComponentContainer(IEnumerable<string> folders,
+          CancellationToken cancellationToken)
         {
             var catalog = new AggregateCatalog();
             HashSet<string> searchedFolders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             foreach(string folder in folders)
-                AddAssemblyCatalogs(catalog, folder, searchedFolders, true);
+                AddAssemblyCatalogs(catalog, folder, searchedFolders, true, cancellationToken);
 
-            AddAssemblyCatalogs(catalog, ComponentsFolder, searchedFolders, true);
+            AddAssemblyCatalogs(catalog, ComponentsFolder, searchedFolders, true, cancellationToken);
 
             // As noted in the comments above, the root SHFB folder is always searched first due to how MEF
             // uses directory catalogs.  This will add components from subfolders beneath it too.
-            AddAssemblyCatalogs(catalog, ToolsFolder, searchedFolders, true);
+            AddAssemblyCatalogs(catalog, ToolsFolder, searchedFolders, true, cancellationToken);
 
             return new CompositionContainer(catalog);
         }
@@ -229,16 +263,23 @@ namespace Sandcastle.Core
         /// <param name="searchedFolders">A hash set of folders that have already been searched and added.</param>
         /// <param name="includeSubfolders">True to search subfolders recursively, false to only search the given
         /// folder.</param>
+        /// <param name="cancellationToken">An optional cancellation token or null if not supported by the caller.</param>
         /// <remarks>It is done this way to prevent a single assembly that would normally be discovered via a
         /// directory catalog from preventing all assemblies from loading if it cannot be examined when the parts
         /// are composed (i.e. trying to load a Windows Store assembly on Windows 7).</remarks>
         private static void AddAssemblyCatalogs(AggregateCatalog catalog, string folder,
-          HashSet<string> searchedFolders, bool includeSubfolders)
+          HashSet<string> searchedFolders, bool includeSubfolders, CancellationToken cancellationToken)
         {
+            if(cancellationToken != null)
+                cancellationToken.ThrowIfCancellationRequested();
+
             if(!String.IsNullOrWhiteSpace(folder) && Directory.Exists(folder) && !searchedFolders.Contains(folder))
             {
                 foreach(var file in Directory.EnumerateFiles(folder, "*.dll"))
                 {
+                    if(cancellationToken != CancellationToken.None)
+                        cancellationToken.ThrowIfCancellationRequested();
+
                     try
                     {
                         var asmCat = new AssemblyCatalog(file);
@@ -251,10 +292,20 @@ namespace Sandcastle.Core
                             catalog.Catalogs.Add(asmCat);
                         else
                             asmCat.Dispose();
+
+                    }   // Ignore the errors we may expect to see but log them for debugging purposes
+                    catch(ArgumentException ex)
+                    {
+                        // These can occur if it tries to load a foreign framework assembly (i.e. .NETStandard)
+                        // In this case, the inner exception will be the bad image format exception.  If not,
+                        // report the issue.
+                        if(!(ex.InnerException is BadImageFormatException))
+                            throw;
+
+                        System.Diagnostics.Debug.WriteLine(ex);
                     }
                     catch(FileNotFoundException ex)
                     {
-                        // Ignore the errors we may expect to see but log them for debugging purposes
                         System.Diagnostics.Debug.WriteLine(ex);
                     }
                     catch(FileLoadException ex)
@@ -295,7 +346,7 @@ namespace Sandcastle.Core
                     try
                     {
                         foreach(string subfolder in Directory.EnumerateDirectories(folder, "*", SearchOption.AllDirectories))
-                            AddAssemblyCatalogs(catalog, subfolder, searchedFolders, false);
+                            AddAssemblyCatalogs(catalog, subfolder, searchedFolders, false, cancellationToken);
                     }
                     catch(IOException ex)
                     {
@@ -402,7 +453,7 @@ namespace Sandcastle.Core
 
                     case "allbutusage":     // All but usage filters
                         filters.AddRange(allFilters.Where(sf => sf.Id.IndexOf("usage",
-                            StringComparison.Ordinal) == -1));
+                            StringComparison.OrdinalIgnoreCase) == -1));
                         break;
 
                     case "standard":    // Standard syntax filters

@@ -2,8 +2,8 @@
 // System  : Sandcastle Help File Builder Utilities
 // File    : SandcastleProject.cs
 // Author  : Eric Woodruff  (Eric@EWoodruff.us)
-// Updated : 06/05/2015
-// Note    : Copyright 2006-2015, Eric Woodruff, All rights reserved
+// Updated : 12/10/2017
+// Note    : Copyright 2006-2017, Eric Woodruff, All rights reserved
 // Compiler: Microsoft Visual C#
 //
 // This file contains the project class.
@@ -68,7 +68,15 @@
 // -------  12/17/2013  EFW  Removed the SandcastlePath property and all references to it
 //          12/20/2013  EFW  Added support for the ComponentPath project property
 //          05/03/2015  EFW  Removed support for the MS Help 2 file format
+//          01/22/2016  EFW  Added SaveComponentCacheCapacity property
+//          08/25/2016  EFW  Added support for the SourceCodeBasePath property
+//          09/22/2017  EFW  Added support for EditorBrowsable and Browsable attribute visibility settings
+//          12/10/2017  EFW  Added support for the WebsiteAdContent and SearchResultsDisplayVersion properties
 //===============================================================================================================
+
+// Ignore Spelling: Fehr Stazzz param typeparam safeprojectname apifilter documentationsources namespacesummaries
+// Ignore Spelling: componentconfigurations pluginconfigurations transformcomponentarguments helpfileformat
+// Ignore Spelling: frameworkversion presentationstyle visibleitems
 
 using System;
 using System.Collections.Generic;
@@ -86,7 +94,7 @@ using System.Xml.Serialization;
 using Microsoft.Build.Evaluation;
 
 using Sandcastle.Core;
-using Sandcastle.Core.Frameworks;
+using Sandcastle.Core.Reflection;
 using Sandcastle.Core.PresentationStyle;
 
 using SandcastleBuilder.Utils.BuildComponent;
@@ -108,7 +116,7 @@ namespace SandcastleBuilder.Utils
         /// <summary>
         /// The schema version used in the saved project files
         /// </summary>
-        public static readonly Version SchemaVersion = new Version(2015, 6, 5, 0);
+        public static readonly Version SchemaVersion = new Version(2017, 9, 26, 0);
 
         /// <summary>The default configuration</summary>
         public const string DefaultConfiguration = "Debug";
@@ -116,7 +124,7 @@ namespace SandcastleBuilder.Utils
         public const string DefaultPlatform = "AnyCPU";
 
         // Restricted property names that cannot be used for user-defined property names
-        internal static List<string> restrictedProps = new List<string>() {
+        internal static HashSet<string> restrictedProps = new HashSet<string>(StringComparer.OrdinalIgnoreCase) {
             "AssemblyName", "Configuration", "CustomAfterSHFBTargets", "CustomBeforeSHFBTargets",
             "DumpLogOnFailure", "Name", "Platform", "PostBuildEvent", "PreBuildEvent", "ProjectGuid",
             "RootNamespace", "RunPostBuildEvent", "SccAuxPath", "SccLocalPath", "SccProjectName", "SccProvider",
@@ -144,7 +152,7 @@ namespace SandcastleBuilder.Utils
         private static PropertyDescriptorCollection pdcCache;
 
         // Path and build-related properties
-        private FolderPath hhcPath, workingPath, componentPath;
+        private FolderPath hhcPath, workingPath, componentPath, sourceCodeBasePath;
         private FilePath buildLogFile;
         private string outputPath, frameworkVersion;
         private int maximumGroupParts;
@@ -152,8 +160,8 @@ namespace SandcastleBuilder.Utils
         // Help file properties
         private string helpTitle, htmlHelpName, copyrightHref, copyrightText, feedbackEMailAddress,
             feedbackEMailLinkText, headerText, footerText, projectSummary, rootNamespaceTitle, presentationStyle,
-            helpFileVersion, syntaxFilters, vendorName, productTitle, topicVersion, tocParentId,
-            tocParentVersion, catalogProductId, catalogVersion, catalogName;
+            helpFileVersion, syntaxFilters, vendorName, productTitle, topicVersion, tocParentId, tocParentVersion,
+            catalogProductId, catalogVersion, catalogName;
         private CultureInfo language;
         private int tocOrder;
 
@@ -177,10 +185,11 @@ namespace SandcastleBuilder.Utils
             get
             {
                 // There can be duplicate versions of the properties so pick the last one as it will contain
-                // the value to use.
+                // the value to use.  Property names are case-insensitive.
                 if(projectPropertyCache == null)
-                    projectPropertyCache = msBuildProject.AllEvaluatedProperties.GroupBy(p => p.Name).Select(
-                        g => g.Last()).ToDictionary(p => p.Name);
+                    projectPropertyCache = msBuildProject.AllEvaluatedProperties.GroupBy(
+                        p => p.Name.ToLowerInvariant()).Select(g => g.Last()).ToDictionary(
+                            p => p.Name, StringComparer.OrdinalIgnoreCase);
 
                 return projectPropertyCache;
             }
@@ -189,10 +198,7 @@ namespace SandcastleBuilder.Utils
         /// <summary>
         /// This read-only property is used to get the underlying MSBuild project
         /// </summary>
-        public Project MSBuildProject
-        {
-            get { return msBuildProject; }
-        }
+        public Project MSBuildProject => msBuildProject;
 
         /// <summary>
         /// This read-only property is used to get whether or not the project is using final values for the
@@ -206,10 +212,7 @@ namespace SandcastleBuilder.Utils
         /// <summary>
         /// This read-only property is used to get the filename for the project
         /// </summary>
-        public string Filename
-        {
-            get { return msBuildProject.FullPath; }
-        }
+        public string Filename => msBuildProject.FullPath;
 
         /// <summary>
         /// This is used to get or set the configuration to use when building the project
@@ -310,10 +313,7 @@ namespace SandcastleBuilder.Utils
         /// <summary>
         /// This is used to get the dirty state of the project
         /// </summary>
-        public bool IsDirty
-        {
-            get { return msBuildProject.Xml.HasUnsavedChanges; }
-        }
+        public bool IsDirty => msBuildProject.Xml.HasUnsavedChanges;
 
         /// <summary>
         /// This read-only property is used to get the build log file location
@@ -388,9 +388,10 @@ namespace SandcastleBuilder.Utils
 
                     if(!String.IsNullOrWhiteSpace(id))
                     {
-                        imageRef = new ImageReference(new FilePath(item.UnevaluatedInclude, this), id);
-
-                        imageRef.AlternateText = item.GetMetadataValue(BuildItemMetadata.AlternateText);
+                        imageRef = new ImageReference(new FilePath(item.UnevaluatedInclude, this), id)
+                        {
+                            AlternateText = item.GetMetadataValue(BuildItemMetadata.AlternateText)
+                        };
 
                         if(!Boolean.TryParse(item.GetMetadataValue(BuildItemMetadata.CopyToMedia), out copyToMedia))
                             copyToMedia = false;
@@ -418,8 +419,10 @@ namespace SandcastleBuilder.Utils
                 if(argsProp != null && !String.IsNullOrEmpty(argsProp.UnevaluatedValue))
                 {
                     var xr = new XmlTextReader("<Args>" + argsProp.UnevaluatedValue + "</Args>",
-                        XmlNodeType.Element, new XmlParserContext(null, null, null, XmlSpace.Preserve));
-                    xr.Namespaces = false;
+                        XmlNodeType.Element, new XmlParserContext(null, null, null, XmlSpace.Preserve))
+                    {
+                        Namespaces = false
+                    };
                     xr.MoveToContent();
 
                     foreach(var arg in XElement.Load(xr, LoadOptions.PreserveWhitespace).Descendants("Argument"))
@@ -442,7 +445,7 @@ namespace SandcastleBuilder.Utils
                     {
                         if(!prop.IsEnvironmentProperty && !prop.IsGlobalProperty && !prop.IsImported &&
                           !prop.IsReservedProperty && !propertyCache.ContainsKey(prop.Name) &&
-                          restrictedProps.IndexOf(prop.Name) == -1)
+                          !restrictedProps.Contains(prop.Name))
                         {
                             yield return prop;
                         }
@@ -506,6 +509,31 @@ namespace SandcastleBuilder.Utils
                 componentPath = value;
             }
         }
+
+        /// <summary>
+        /// This property is used to get or set the base path used to locate source code for the documented
+        /// assemblies.
+        /// </summary>
+        /// <value>If left blank, source context information will be omitted from the reflection data</value>
+        public FolderPath SourceCodeBasePath
+        {
+            get { return sourceCodeBasePath; }
+            set
+            {
+                if(value == null)
+                    value = new FolderPath(this);
+
+                sourceCodeBasePath = value;
+            }
+        }
+
+        /// <summary>
+        /// This is used to get or set whether or not to issue a warning if a source code context could not be
+        /// determined for a type.
+        /// </summary>
+        /// <value>This is false by default and missing source context issues will be reported as informational
+        /// messages.  If set to true, they are reported as warnings that MSBuild will also report.</value>
+        public bool WarnOnMissingSourceContext { get; set; }
 
         /// <summary>
         /// This property is used to get or set the path to the HTML Help 1 compiler (HHC.EXE)
@@ -640,7 +668,7 @@ namespace SandcastleBuilder.Utils
                 // Let bad values through.  The property pages or the build engine will catch bad values if
                 // necessary.
                 if(String.IsNullOrWhiteSpace(value))
-                    value = FrameworkDictionary.DefaultFrameworkTitle;
+                    value = ReflectionDataSetDictionary.DefaultFrameworkTitle;
 
                 frameworkVersion = value;
             }
@@ -653,6 +681,15 @@ namespace SandcastleBuilder.Utils
         /// <value>This is mainly a debugging aid.  Leave it set to false, the default, to produce more compact
         /// HTML.</value>
         public bool IndentHtml { get; private set; }
+
+        /// <summary>
+        /// This read-only property is used to get the build assembler Save Component writer task cache capacity
+        /// </summary>
+        /// <value>The default is 100 to limit the cache to 100 entries</value>
+        /// <remarks>Decrease the value to conserve memory, increase it to help with build speed at the expense
+        /// of memory used.  Set it to zero to allow an unbounded cache for the writer task (best speed at the
+        /// expense of memory used).</remarks>
+        public int SaveComponentCacheCapacity { get; private set; }
 
         /// <summary>
         /// This read-only property is used to get a dictionary of build component configurations
@@ -868,10 +905,7 @@ namespace SandcastleBuilder.Utils
         /// This read-only property is used to get the copyright notice that appears in the footer of each page
         /// with any hex value place holders replaced with their actual character.
         /// </summary>
-        public string DecodedCopyrightText
-        {
-            get { return reDecode.Replace(copyrightText, characterMatchEval); }
-        }
+        public string DecodedCopyrightText => reDecode.Replace(copyrightText, characterMatchEval);
 
         /// <summary>
         /// This read-only property is used to get the feedback e-mail address that appears in the footer of each
@@ -1008,9 +1042,8 @@ namespace SandcastleBuilder.Utils
         /// <summary>
         /// This read-only property is used to get the Product ID portion of the MS Help Viewer 1.0 Catalog ID
         /// </summary>
-        /// <remarks><para>If not specified, the default is "VS".</para>
-        /// 
-        /// <para>The MS Help Viewer Catalog 1.0 ID is composed of the <c>CatalogProductId</c> the
+        /// <value>If not specified, the default is "VS".</value>
+        /// <remarks><para>The MS Help Viewer Catalog 1.0 ID is composed of the <c>CatalogProductId</c> the
         /// <see cref="CatalogVersion"/>, and the <see cref="Language"/> code. For example, the English Visual
         /// Studio 10 catalog is <c>VS_100_EN-US</c>.</para>
         /// 
@@ -1034,11 +1067,10 @@ namespace SandcastleBuilder.Utils
         /// <summary>
         /// This read-only property is used to get the Version portion of the MS Help Viewer 1.0 Catalog ID
         /// </summary>
-        /// <remarks><para>If not specified, the default is "100".</para>
-        /// 
-        /// <para>The MS Help Viewer 1.0 Catalog ID is composed of the <see cref="CatalogProductId"/>, the
-        /// <c>CatalogVersion</c>, and the <see cref="Language"/> code. For example, the English Visual Studio 10
-        /// catalog is <c>VS_100_EN-US</c>.</para>
+        /// <value>If not specified, the default is "100"</value>
+        /// <remarks><para>The MS Help Viewer 1.0 Catalog ID is composed of the <see cref="CatalogProductId"/>,
+        /// the <c>CatalogVersion</c>, and the <see cref="Language"/> code. For example, the English Visual
+        /// Studio 10 catalog is <c>VS_100_EN-US</c>.</para>
         /// 
         /// <note type="note">You should typically used the default value</note>
         /// </remarks>
@@ -1060,8 +1092,8 @@ namespace SandcastleBuilder.Utils
         /// <summary>
         /// This read-only property is used to get a non-standard MS Help Viewer 2.x content catalog name
         /// </summary>
-        /// <remarks>If not specified, the default will be set based on the Visual Studio version catalog related
-        /// to the Help Viewer (VisualStudio12 for Visual Studio 2013 for example).</remarks>
+        /// <value>If not specified, the default will be set based on the Visual Studio version catalog related
+        /// to the Help Viewer (VisualStudio12 for Visual Studio 2013 for example).</value>
         [EscapeValue]
         public string CatalogName
         {
@@ -1080,8 +1112,8 @@ namespace SandcastleBuilder.Utils
         /// <summary>
         /// This read-only property is used to get the vendor name for the help viewer file
         /// </summary>
-        /// <remarks>The default if not specified will be "Vendor Name".  The value must not contain the ':',
-        /// '\', '/', '.', ',', '#', or '&amp;' characters.</remarks>
+        /// <value>The default if not specified will be "Vendor Name".  The value must not contain the ':',
+        /// '\', '/', '.', ',', '#', or '&amp;' characters.</value>
         [EscapeValue]
         public string VendorName
         {
@@ -1103,8 +1135,7 @@ namespace SandcastleBuilder.Utils
         /// <summary>
         /// This read-only property is used to get the product title for the help viewer file
         /// </summary>
-        /// <remarks>The default if not specified will be the value of the <see cref="HelpTitle" />
-        /// property.</remarks>
+        /// <value>The default if not specified will be the value of the <see cref="HelpTitle" /> property</value>
         [EscapeValue]
         public string ProductTitle
         {
@@ -1115,7 +1146,7 @@ namespace SandcastleBuilder.Utils
         /// <summary>
         /// This read-only property is used to get the topic version for each topic in the help file
         /// </summary>
-        /// <remarks>The default is "100" (meaning 10.0)</remarks>
+        /// <value>The default is "100" (meaning 10.0)</value>
         [EscapeValue]
         public string TopicVersion
         {
@@ -1135,7 +1166,7 @@ namespace SandcastleBuilder.Utils
         /// This read-only property is used to get the table of contents parent for each root topic in the help
         /// file.
         /// </summary>
-        /// <remarks>The default is "-1" to show the root topics in the root of the main table of content</remarks>
+        /// <value>The default is "-1" to show the root topics in the root of the main table of content</value>
         [EscapeValue]
         public string TocParentId
         {
@@ -1154,7 +1185,7 @@ namespace SandcastleBuilder.Utils
         /// <summary>
         /// This read-only property is used to get the topic version of the <see cref="TocParentId" /> topic
         /// </summary>
-        /// <remarks>The default is "100" meaning "10.0"</remarks>
+        /// <value>The default is "100" meaning "10.0"</value>
         [EscapeValue]
         public string TocParentVersion
         {
@@ -1174,8 +1205,8 @@ namespace SandcastleBuilder.Utils
         /// This read-only property is used to get the sort order for conceptual content so that it appears
         /// within its parent in the correct position.
         /// </summary>
-        /// <remarks>The default is -1 to let the build engine determine the best value to use based on the
-        /// other project properties.</remarks>
+        /// <value>The default is -1 to let the build engine determine the best value to use based on the
+        /// other project properties.</value>
         public int TocOrder
         {
             get { return tocOrder; }
@@ -1187,6 +1218,16 @@ namespace SandcastleBuilder.Utils
                 tocOrder = value;
             }
         }
+
+        /// <summary>
+        /// This is used to get or set the display version shown below entries in the search results pane in the
+        /// help viewer application.
+        /// </summary>
+        /// <value>If not set, a display version will not be shown for topics in the search results pane</value>
+        /// <remarks>If set, this typically refers to the SDK name and version or the module in which the member
+        /// resides to help differentiate it from other entries with the same title in the search results.</remarks>
+        public string SearchResultsDisplayVersion { get; set; }
+
         #endregion
 
         #region Website properties
@@ -1198,6 +1239,27 @@ namespace SandcastleBuilder.Utils
         /// </summary>
         /// <value>The default is to produce links to online MSDN content</value>
         public HtmlSdkLinkType WebsiteSdkLinkType { get; private set; }
+
+        /// <summary>
+        /// This read-only property is used to get the ad content to place in each page in the website help file
+        /// format.
+        /// </summary>
+        [EscapeValue]
+        public string WebsiteAdContent { get; set; }
+
+        #endregion
+
+        #region Markdown properties
+        //=====================================================================
+
+        /// <summary>
+        /// This read-only property is used to get whether or not to append ".md" extensions to topic URLs
+        /// </summary>
+        /// <value>The default is to false to leave them off.  This is suitable for GitHib wiki content which
+        /// does not add the filename extensions.  Adding them causes the wiki to link to the raw file content
+        /// rather than the rendered topic.  If your site uses them or if you are rendering content to store in
+        /// source control where they are used, set this property to true.</value>
+        public bool AppendMarkdownFileExtensionsToUrls { get; private set; }
 
         #endregion
 
@@ -1213,91 +1275,62 @@ namespace SandcastleBuilder.Utils
         /// This read-only property is used to get whether or not missing namespace comments are indicated in the
         /// help file.
         /// </summary>
-        public bool ShowMissingNamespaces
-        {
-            get { return ((this.MissingTags & MissingTags.Namespace) != 0); }
-        }
+        public bool ShowMissingNamespaces => (this.MissingTags & MissingTags.Namespace) != 0;
 
         /// <summary>
         /// This read-only property is used to get whether or not missing &lt;summary&gt; tags are indicated in
         /// the help file.
         /// </summary>
-        public bool ShowMissingSummaries
-        {
-            get { return ((this.MissingTags & MissingTags.Summary) != 0); }
-        }
+        public bool ShowMissingSummaries => (this.MissingTags & MissingTags.Summary) != 0;
 
         /// <summary>
         /// This read-only property is used to get whether or not missing &lt;param&gt; tags are indicated in the
         /// help file
         /// </summary>
-        public bool ShowMissingParams
-        {
-            get { return ((this.MissingTags & MissingTags.Parameter) != 0); }
-        }
+        public bool ShowMissingParams => (this.MissingTags & MissingTags.Parameter) != 0;
 
         /// <summary>
         /// This read-only property is used to get whether or not missing &lt;typeparam&gt; tags on generic types
         /// and methods are indicated in the help file.
         /// </summary>
-        public bool ShowMissingTypeParams
-        {
-            get { return ((this.MissingTags & MissingTags.TypeParameter) != 0); }
-        }
+        public bool ShowMissingTypeParams => (this.MissingTags & MissingTags.TypeParameter) != 0;
 
         /// <summary>
         /// This read-only property is used to get whether or not missing &lt;returns&gt; tags are indicated in
         /// the help file.
         /// </summary>
-        public bool ShowMissingReturns
-        {
-            get { return ((this.MissingTags & MissingTags.Returns) != 0); }
-        }
+        public bool ShowMissingReturns => (this.MissingTags & MissingTags.Returns) != 0;
 
         /// <summary>
         /// This read-only property is used to get whether or not missing &lt;value&gt; tags are indicated in the
         /// help file.
         /// </summary>
-        public bool ShowMissingValues
-        {
-            get { return ((this.MissingTags & MissingTags.Value) != 0); }
-        }
+        public bool ShowMissingValues => (this.MissingTags & MissingTags.Value) != 0;
 
         /// <summary>
         /// This read-only property is used to get whether or not missing &lt;remarks&gt; tags are indicated in
         /// the help file.
         /// </summary>
-        public bool ShowMissingRemarks
-        {
-            get { return ((this.MissingTags & MissingTags.Remarks) != 0); }
-        }
+        public bool ShowMissingRemarks => (this.MissingTags & MissingTags.Remarks) != 0;
 
         /// <summary>
         /// This read-only property is used to get whether or not constructors are automatically documented if
         /// they are missing the &lt;summary&gt; tag and for classes with compiler generated constructors.
         /// </summary>
-        public bool AutoDocumentConstructors
-        {
-            get { return ((this.MissingTags & MissingTags.AutoDocumentCtors) != 0); }
-        }
+        public bool AutoDocumentConstructors => (this.MissingTags & MissingTags.AutoDocumentCtors) != 0;
 
         /// <summary>
         /// This read-only property is used to get whether or not dispose methods are automatically documented if
         /// they are missing the &lt;summary&gt; tag and for classes with compiler generated dispose methods.
         /// </summary>
-        public bool AutoDocumentDisposeMethods
-        {
-            get { return ((this.MissingTags & MissingTags.AutoDocumentDispose) != 0); }
-        }
+        public bool AutoDocumentDisposeMethods => (this.MissingTags & MissingTags.AutoDocumentDispose) != 0;
 
         /// <summary>
         /// This read-only property is used to get whether or not missing &lt;include&gt; tag target
         /// documentation is indicated in the help file.
         /// </summary>
-        public bool ShowMissingIncludeTargets
-        {
-            get { return ((this.MissingTags & MissingTags.IncludeTargets) != 0); }
-        }
+        public bool ShowMissingIncludeTargets => (this.MissingTags & MissingTags.IncludeTargets) != 0;
+
         #endregion
 
         #region Visibility properties
@@ -1312,115 +1345,94 @@ namespace SandcastleBuilder.Utils
         /// This read-only property is used to get whether or not attributes on types and members are documented
         /// in the syntax portion of the help file.
         /// </summary>
-        public bool DocumentAttributes
-        {
-            get { return ((this.VisibleItems & VisibleItems.Attributes) != 0); }
-        }
+        public bool DocumentAttributes => (this.VisibleItems & VisibleItems.Attributes) != 0;
 
         /// <summary>
         /// This read-only property is used to get whether or not explicit interface implementations are
         /// documented.
         /// </summary>
-        public bool DocumentExplicitInterfaceImplementations
-        {
-            get { return ((this.VisibleItems & VisibleItems.ExplicitInterfaceImplementations) != 0); }
-        }
+        public bool DocumentExplicitInterfaceImplementations => (this.VisibleItems & VisibleItems.ExplicitInterfaceImplementations) != 0;
 
         /// <summary>
         /// This read-only property is used to get whether or not inherited members are documented
         /// </summary>
-        public bool DocumentInheritedMembers
-        {
-            get { return ((this.VisibleItems & VisibleItems.InheritedMembers) != 0); }
-        }
+        public bool DocumentInheritedMembers => (this.VisibleItems & VisibleItems.InheritedMembers) != 0;
 
         /// <summary>
         /// This read-only property is used to get whether or not inherited framework members are documented
         /// </summary>
-        public bool DocumentInheritedFrameworkMembers
-        {
-            get { return ((this.VisibleItems & VisibleItems.InheritedFrameworkMembers) != 0); }
-        }
+        public bool DocumentInheritedFrameworkMembers => (this.VisibleItems & VisibleItems.InheritedFrameworkMembers) != 0;
 
         /// <summary>
         /// This read-only property is used to get whether or not inherited internal framework members are
         /// documented.
         /// </summary>
-        public bool DocumentInheritedFrameworkInternalMembers
-        {
-            get { return ((this.VisibleItems & VisibleItems.InheritedFrameworkInternalMembers) != 0); }
-        }
+        public bool DocumentInheritedFrameworkInternalMembers => (this.VisibleItems & VisibleItems.InheritedFrameworkInternalMembers) != 0;
 
         /// <summary>
         /// This read-only property is used to get whether or not inherited private framework members are
         /// documented.
         /// </summary>
-        public bool DocumentInheritedFrameworkPrivateMembers
-        {
-            get { return ((this.VisibleItems & VisibleItems.InheritedFrameworkPrivateMembers) != 0); }
-        }
+        public bool DocumentInheritedFrameworkPrivateMembers => (this.VisibleItems & VisibleItems.InheritedFrameworkPrivateMembers) != 0;
 
         /// <summary>
         /// This read-only property is used to get whether or not internal members are documented in the help
         /// file.
         /// </summary>
-        public bool DocumentInternals
-        {
-            get { return ((this.VisibleItems & VisibleItems.Internals) != 0); }
-        }
+        public bool DocumentInternals => (this.VisibleItems & VisibleItems.Internals) != 0;
 
         /// <summary>
         /// This read-only property is used to get whether or not private members are documented in the help file
         /// </summary>
-        public bool DocumentPrivates
-        {
-            get { return ((this.VisibleItems & VisibleItems.Privates) != 0); }
-        }
+        public bool DocumentPrivates => (this.VisibleItems & VisibleItems.Privates) != 0;
 
         /// <summary>
         /// This read-only property is used to get or set whether or not private fields are documented in the
         /// help file.
         /// </summary>
-        public bool DocumentPrivateFields
-        {
-            get { return ((this.VisibleItems & VisibleItems.PrivateFields) != 0); }
-        }
+        public bool DocumentPrivateFields => (this.VisibleItems & VisibleItems.PrivateFields) != 0;
 
         /// <summary>
         /// This read-only property is used to get whether or not protected members are documented in the help
         /// file.
         /// </summary>
-        public bool DocumentProtected
-        {
-            get { return ((this.VisibleItems & VisibleItems.Protected) != 0); }
-        }
+        public bool DocumentProtected => (this.VisibleItems & VisibleItems.Protected) != 0;
 
         /// <summary>
         /// This read-only property is used to get whether or not protected members of sealed classes are
         /// documented in the help file.
         /// </summary>
-        public bool DocumentSealedProtected
-        {
-            get { return ((this.VisibleItems & VisibleItems.SealedProtected) != 0); }
-        }
+        public bool DocumentSealedProtected => (this.VisibleItems & VisibleItems.SealedProtected) != 0;
 
         /// <summary>
         /// This read-only property is used to get whether or not "protected internal" members are documented as
         /// "protected" only in the help file.
         /// </summary>
-        public bool DocumentProtectedInternalAsProtected
-        {
-            get { return ((this.VisibleItems & VisibleItems.ProtectedInternalAsProtected) != 0); }
-        }
+        public bool DocumentProtectedInternalAsProtected => (this.VisibleItems & VisibleItems.ProtectedInternalAsProtected) != 0;
 
         /// <summary>
         /// This read-only property is used to get whether or not no-PIA (Primary Interop Assembly) embedded
         /// interop types are documented in the help file.
         /// </summary>
-        public bool DocumentNoPIATypes
-        {
-            get { return ((this.VisibleItems & VisibleItems.NoPIATypes) != 0); }
-        }
+        public bool DocumentNoPIATypes => (this.VisibleItems & VisibleItems.NoPIATypes) != 0;
+
+        /// <summary>
+        /// This read-only property is used to get whether or not public compiler generated types and members are
+        /// documented in the help file.
+        /// </summary>
+        public bool DocumentPublicCompilerGenerated => (this.VisibleItems & VisibleItems.PublicCompilerGenerated) != 0;
+
+        /// <summary>
+        /// This read-only property is used to get whether or not members marked with an
+        /// <see cref="System.ComponentModel.EditorBrowsableAttribute"/> set to <c>Never</c> are documented.
+        /// </summary>
+        public bool DocumentEditorBrowsableNever => (this.VisibleItems & VisibleItems.EditorBrowsableNever) != 0;
+
+        /// <summary>
+        /// This read-only property is used to get whether or not members marked with a
+        /// <see cref="System.ComponentModel.BrowsableAttribute"/> set to <c>False</c> are documented.
+        /// </summary>
+        public bool DocumentNonBrowsable => (this.VisibleItems & VisibleItems.NonBrowsable) != 0;
 
         /// <summary>
         /// This read-only property is used to get the API filter
@@ -1448,13 +1460,7 @@ namespace SandcastleBuilder.Utils
         //=====================================================================
 
         /// <inheritdoc />
-        public string BasePath
-        {
-            get
-            {
-                return Path.GetDirectoryName(MSBuildProject.FullPath);
-            }
-        }
+        public string BasePath => Path.GetDirectoryName(MSBuildProject.FullPath);
 
         /// <summary>
         /// This method resolves any MSBuild environment variables in the path objects
@@ -1519,9 +1525,10 @@ namespace SandcastleBuilder.Utils
                 MissingTags.AutoDocumentDispose;
 
             this.VisibleItems = VisibleItems.InheritedFrameworkMembers | VisibleItems.InheritedMembers |
-                VisibleItems.Protected | VisibleItems.ProtectedInternalAsProtected;
+                VisibleItems.Protected | VisibleItems.ProtectedInternalAsProtected | VisibleItems.NonBrowsable;
 
             this.BuildAssemblerVerbosity = BuildAssemblerVerbosity.OnlyWarningsAndErrors;
+            this.SaveComponentCacheCapacity = 100;
             this.HelpFileFormat = HelpFileFormats.HtmlHelp1;
             this.HtmlSdkLinkType = this.WebsiteSdkLinkType = HtmlSdkLinkType.Msdn;
             this.MSHelpViewerSdkLinkType = MSHelpViewerSdkLinkType.Msdn;
@@ -1533,7 +1540,7 @@ namespace SandcastleBuilder.Utils
             maximumGroupParts = 2;
 
             this.OutputPath = null;
-            this.HtmlHelp1xCompilerPath = this.WorkingPath = this.ComponentPath = null;
+            this.HtmlHelp1xCompilerPath = this.WorkingPath = this.ComponentPath = this.SourceCodeBasePath = null;
 
             this.HelpTitle = this.HtmlHelpName = this.CopyrightHref = this.CopyrightText =
                 this.FeedbackEMailAddress = this.FeedbackEMailLinkText = this.HeaderText = this.FooterText =
@@ -1732,8 +1739,8 @@ namespace SandcastleBuilder.Utils
                 if(!Double.TryParse(msBuildProject.ToolsVersion, out toolsVersion))
                     toolsVersion = 0.0;
 
-                if(toolsVersion < 4.0)
-                    msBuildProject.Xml.ToolsVersion = "4.0";
+                if(toolsVersion < 14.0)
+                    msBuildProject.Xml.ToolsVersion = "14.0";
 
                 if(!this.ProjectPropertyCache.TryGetValue("SHFBSchemaVersion", out property))
                     throw new BuilderException("PRJ0001", "Invalid or missing SHFBSchemaVersion");
@@ -1750,19 +1757,19 @@ namespace SandcastleBuilder.Utils
                 // Note that many properties don't use the final value as they don't contain variables that
                 // need replacing.
                 foreach(ProjectProperty prop in this.ProjectPropertyCache.Values)
-                    switch(prop.Name)
+                    switch(prop.Name.ToLowerInvariant())
                     {
-                        case "ApiFilter":           // These collections are created as needed
-                        case "DocumentationSources":
-                        case "NamespaceSummaries":
-                        case "ComponentConfigurations":
-                        case "PlugInConfigurations":
-                        case "Configuration":       // These properties are ignored
-                        case "Platform":
-                        case "TransformComponentArguments":
+                        case "apifilter":           // These collections are created as needed
+                        case "documentationsources":
+                        case "namespacesummaries":
+                        case "componentconfigurations":
+                        case "pluginconfigurations":
+                        case "configuration":       // These properties are ignored
+                        case "platform":
+                        case "transformcomponentarguments":
                             break;
 
-                        case "HelpFileFormat":
+                        case "helpfileformat":
                             // The enum value names changed in v1.8.0.3
                             if(schemaVersion.Major == 1 && schemaVersion.Minor == 8 &&
                               schemaVersion.Build == 0 && schemaVersion.Revision < 3)
@@ -1772,7 +1779,7 @@ namespace SandcastleBuilder.Utils
                                 foreach(string key in translateFormat.Keys)
                                     helpFormats = helpFormats.Replace(key, translateFormat[key]);
 
-                                this.SetLocalProperty(prop.Name, helpFormats);
+                                this.SetLocalProperty(prop, helpFormats);
 
                                 msBuildProject.SetProperty("HelpFileFormat", this.HelpFileFormat.ToString());
                             }
@@ -1782,31 +1789,60 @@ namespace SandcastleBuilder.Utils
                                     // Help 2 was last supported in the 2015.5.2.0 release
                                     helpFormats = prop.UnevaluatedValue.Replace("MSHelp2", "HtmlHelp1");
 
-                                    this.SetLocalProperty(prop.Name, helpFormats);
+                                    this.SetLocalProperty(prop, helpFormats);
 
                                     msBuildProject.SetProperty("HelpFileFormat", this.HelpFileFormat.ToString());
                                 }
                                 else
-                                    this.SetLocalProperty(prop.Name, prop.UnevaluatedValue);
+                                    this.SetLocalProperty(prop, prop.UnevaluatedValue);
                             break;
 
-                        case "FrameworkVersion":
+                        case "frameworkversion":
                             // The values changed in v1.9.2.0 to include the framework type.  They changed in
                             // v1.9.5.0 to use the titles from the Sandcastle framework definition file.
                             if(schemaVersion.Major == 1 && (schemaVersion.Minor < 9 ||
                               (schemaVersion.Minor == 9 && schemaVersion.Build < 5)))
                             {
-                                this.SetLocalProperty(prop.Name, Utility.ConvertFromOldValue(prop.UnevaluatedValue));
+                                this.SetLocalProperty(prop, ConvertOldFrameworkVersion(prop.UnevaluatedValue));
                                 msBuildProject.SetProperty("FrameworkVersion", this.FrameworkVersion);
                             }
                             else
-                                this.SetLocalProperty(prop.Name, prop.UnevaluatedValue);
+                                this.SetLocalProperty(prop, prop.UnevaluatedValue);
+                            break;
+
+                        case "presentationstyle":
+                            // Convert removed presentation styles to the current default presentation style
+                            switch(prop.UnevaluatedValue)
+                            {
+                                case "Hana":
+                                case "Prototype":
+                                case "VS2005":
+                                    this.SetLocalProperty(prop, Constants.DefaultPresentationStyle);
+                                    msBuildProject.SetProperty("PresentationStyle", Constants.DefaultPresentationStyle);
+                                    break;
+
+                                default:
+                                    this.SetLocalProperty(prop, prop.UnevaluatedValue);
+                                    break;
+                            }
+                            break;
+
+                        case "visibleitems":
+                            this.SetLocalProperty(prop, prop.UnevaluatedValue);
+
+                            // Editor Browsable and Non-Browsable were added in v2017.9.26.0.  Turn them on by
+                            // default in older projects to keep the same behavior until turned off explicitly.
+                            if(schemaVersion < new Version(2017, 9, 26, 0))
+                            {
+                                this.VisibleItems |= (VisibleItems.EditorBrowsableNever | VisibleItems.NonBrowsable);
+                                msBuildProject.SetProperty("VisibleItems", this.VisibleItems.ToString());
+                            }
                             break;
 
                         default:
                             // These may or may not contain variable references so use the final value if
                             // requested.
-                            this.SetLocalProperty(prop.Name, this.UsingFinalValues ? prop.EvaluatedValue : prop.UnevaluatedValue);
+                            this.SetLocalProperty(prop, this.UsingFinalValues ? prop.EvaluatedValue : prop.UnevaluatedValue);
                             break;
                     }
 
@@ -1821,10 +1857,11 @@ namespace SandcastleBuilder.Utils
         }
 
         /// <summary>
-        /// This is used to set the named property to the specified value using Reflection
+        /// This is used to set the local property to the specified value of the MSBuild project property using
+        /// Reflection.
         /// </summary>
-        /// <param name="name">The name of the property to set</param>
-        /// <param name="value">The value to which it is set</param>
+        /// <param name="msBuildProperty">The MSBuild project property to use</param>
+        /// <param name="value">The value to which the local property is set</param>
         /// <remarks>Property name matching is case insensitive as are the values.  This is used to allow setting
         /// of simple project properties (non-collection) from the MSBuild project file.  Unknown properties are
         /// ignored.</remarks>
@@ -1832,49 +1869,55 @@ namespace SandcastleBuilder.Utils
         /// string.</exception>
         /// <exception cref="BuilderException">This is thrown if an error occurs while trying to set the named
         /// property.</exception>
-        private void SetLocalProperty(string name, string value)
+        private void SetLocalProperty(ProjectProperty msBuildProperty, string value)
         {
             TypeConverter tc;
             EscapeValueAttribute escAttr;
-            PropertyInfo property;
+            PropertyInfo localProperty;
             FilePath filePath;
             object parsedValue;
 
-            if(String.IsNullOrEmpty(name))
-                throw new ArgumentNullException("name");
+            if(msBuildProperty == null)
+                throw new ArgumentNullException("msBuildProperty");
 
             // Ignore unknown properties
-            if(!propertyCache.TryGetValue(name, out property))
+            if(!propertyCache.TryGetValue(msBuildProperty.Name, out localProperty))
                 return;
 
-            if(!property.CanWrite || property.IsDefined(typeof(XmlIgnoreAttribute), true))
-                throw new BuilderException("PRJ0004", String.Format(CultureInfo.CurrentCulture,
-                    "An attempt was made to set a read-only or ignored property: {0}   Value: {1}",
-                    name, value));
-
-            // If escaped, unescape it
-            escAttr = pdcCache[name].Attributes[typeof(EscapeValueAttribute)] as EscapeValueAttribute;
-
-            if(escAttr != null)
-                value = EscapeValueAttribute.Unescape(value);
+            // This can happen on rare occasions, usually on build servers.  Typically, the property in question
+            // is not related to the SHFB project itself.  The name just happens to match a restricted property.
+            // It's better to ignore it rather than abort loading the project and break the build.  We'll just
+            // log it to the output window for reference when debugging.
+            if(!localProperty.CanWrite || localProperty.IsDefined(typeof(XmlIgnoreAttribute), true))
+            {
+                System.Diagnostics.Debug.WriteLine("**** An attempt was made to set a read-only or ignored " +
+                    "property: {0}   Value: {1}", msBuildProperty.Name, value);
+                return;
+            }
 
             try
             {
-                if(property.PropertyType.IsEnum)
-                    parsedValue = Enum.Parse(property.PropertyType, value, true);
+                // If escaped, unescape it
+                escAttr = pdcCache[localProperty.Name].Attributes[typeof(EscapeValueAttribute)] as EscapeValueAttribute;
+
+                if(escAttr != null)
+                    value = EscapeValueAttribute.Unescape(value);
+
+                if(localProperty.PropertyType.IsEnum)
+                    parsedValue = Enum.Parse(localProperty.PropertyType, value, true);
                 else
-                    if(property.PropertyType == typeof(Version))
+                    if(localProperty.PropertyType == typeof(Version))
                         parsedValue = new Version(value);
                     else
                     {
-                        if(property.PropertyType == typeof(FilePath))
+                        if(localProperty.PropertyType == typeof(FilePath))
                             parsedValue = new FilePath(value, this);
                         else
-                            if(property.PropertyType == typeof(FolderPath))
+                            if(localProperty.PropertyType == typeof(FolderPath))
                                 parsedValue = new FolderPath(value, this);
                             else
                             {
-                                tc = TypeDescriptor.GetConverter(property.PropertyType);
+                                tc = TypeDescriptor.GetConverter(localProperty.PropertyType);
                                 parsedValue = tc.ConvertFromString(value);
                             }
 
@@ -1888,17 +1931,65 @@ namespace SandcastleBuilder.Utils
             }
             catch(Exception ex)
             {
-                // Ignore exceptions for the Language property.  A few people have had an environment variable
-                // with that name that gets picked up as a default and the value isn't typically valid for a
-                // culture name.
-                if(!name.Equals("Language", StringComparison.OrdinalIgnoreCase))
+                // Ignore exceptions for environment variable properties.  A few people have had an environment
+                // variable with a SHFB project property name that gets picked up as a default and the value
+                // isn't typically valid for a SHFB project property (i.e. Language which expects a valid culture
+                // name).  Fail on any others though.
+                if(!msBuildProperty.IsEnvironmentProperty)
                     throw new BuilderException("PRJ0005", "Unable to parse value '" + value +
-                        "' for property '" + name + "'", ex);
+                        "' for property '" + msBuildProperty.Name + "'", ex);
 
                 parsedValue = null;
             }
 
-            property.SetValue(this, parsedValue, null);
+            localProperty.SetValue(this, parsedValue, null);
+        }
+
+        /// <summary>
+        /// This is used to convert old SHFB project framework version values to the new framework version values
+        /// </summary>
+        /// <param name="oldValue">The old value to convert</param>
+        /// <returns>The equivalent new value</returns>
+        private static string ConvertOldFrameworkVersion(string oldValue)
+        {
+            ReflectionDataSet dataSet;
+
+            if(String.IsNullOrWhiteSpace(oldValue))
+                return ReflectionDataSetDictionary.DefaultFrameworkTitle;
+
+            oldValue = oldValue.Trim();
+
+            if(oldValue.IndexOf(".NET ", StringComparison.OrdinalIgnoreCase) != -1 || Char.IsDigit(oldValue[0]))
+            {
+                oldValue = oldValue.ToUpperInvariant().Replace(".NET ", String.Empty).Trim();
+
+                if(oldValue.Length == 0)
+                    oldValue = "4.0";
+                else
+                    if(oldValue.Length > 3)
+                        oldValue = oldValue.Substring(0, 3);
+
+                oldValue = ".NET Framework " + oldValue;
+            }
+            else
+                if(oldValue.IndexOf("Silverlight ", StringComparison.OrdinalIgnoreCase) != -1)
+                {
+                    oldValue = oldValue.ToUpperInvariant().Trim();
+
+                    if(oldValue.EndsWith(".0", StringComparison.Ordinal))
+                        oldValue = oldValue.Substring(0, oldValue.Length - 2);
+                }
+                else
+                    if(oldValue.IndexOf("Portable ", StringComparison.OrdinalIgnoreCase) != -1)
+                        oldValue = ".NET Portable Library 4.0 (Legacy)";
+
+            var rdsd = new ReflectionDataSetDictionary(null);
+
+            // If not found, use the default
+            if(!rdsd.TryGetValue(oldValue, out dataSet))
+                return ReflectionDataSetDictionary.DefaultFrameworkTitle;
+
+            return dataSet.Title;
         }
         #endregion
 
@@ -1971,7 +2062,7 @@ namespace SandcastleBuilder.Utils
         {
             ProjectProperty prop;
 
-            if(msBuildProject == null || propertyCache.ContainsKey(name) || restrictedProps.IndexOf(name) != -1)
+            if(msBuildProject == null || propertyCache.ContainsKey(name) || restrictedProps.Contains(name))
                 return false;
 
             if(this.ProjectPropertyCache.TryGetValue(name, out prop))

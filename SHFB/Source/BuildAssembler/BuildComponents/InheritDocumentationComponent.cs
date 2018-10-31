@@ -27,11 +27,13 @@ using Microsoft.Ddue.Tools.Commands;
 using Sandcastle.Core.BuildAssembler;
 using Sandcastle.Core.BuildAssembler.BuildComponent;
 
-namespace Microsoft.Ddue.Tools
+namespace Microsoft.Ddue.Tools.BuildComponent
 {
     /// <summary>
-    /// InheritDocumentationComponent class.
+    /// Inherit documentation copy component
     /// </summary>
+    /// <remarks>This has been superseded by the Generate Inherited Documentation tool but remains here as an
+    /// example of a copy component.</remarks>
     public class InheritDocumentationComponent : CopyComponentCore
     {
         #region Copy component factory for MEF
@@ -75,7 +77,7 @@ namespace Microsoft.Ddue.Tools
         // XPathExpression for override members.
         private static XPathExpression overrideMemberExpression = XPathExpression.Compile("overrides/member/@api");
 
-        // XPathExpression for API member interface implementaions.
+        // XPathExpression for API member interface implementations.
         private static XPathExpression interfaceImplementationMemberExpression = XPathExpression.Compile("implements/member/@api");
 
         // XPathExpression for <inheritdoc /> nodes.

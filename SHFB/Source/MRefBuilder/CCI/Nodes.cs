@@ -15,6 +15,8 @@
 // 11/21/2013 - EFW - Cleared out the conditional statements and unused code and updated based on changes to
 // ListTemplate.cs.
 // 03/14/2014 - EFW - Fixed bug in TypeNode.GetMatchingMethod() reported by SHarwell.
+// 08/23/2016 - EFW - Added support for reading source code context from PDB files
+// 07/06/2018 - EFW - Increased the maximum allowed recursion depth related to the 04/04/2012 fix
 
 using System.Collections;
 using System.Collections.Generic;
@@ -5714,7 +5716,7 @@ doUTF8decoding:
                     return this.win32Resources;
                 if(this.provideResources != null)
                 {
-                    ResourceList dummy = this.Resources; //gets the win32 resources as as side effect
+                    ResourceList dummy = this.Resources; //gets the win32 resources as a side effect
                     if(dummy != null)
                         dummy = null;
                 }
@@ -8153,6 +8155,11 @@ throwError:
             set { this.templateInstances = value; }
         }
 
+        /// <summary>
+        /// The element names if this is a something that has named elements such as <c>ValueTuple</c>
+        /// </summary>
+        internal Collections.Specialized.StringEnumerator ElementNames { get; set; }
+
         internal TypeNode(NodeType nodeType)
             : base(nodeType)
         {
@@ -9347,8 +9354,17 @@ done:
                 parentArgs.Add(consolidatedArguments[i]);
             TypeNode declaringType = this.DeclaringType.GetGenericTemplateInstance(module, parentArgs);
             TypeNode nestedType = declaringType.GetNestedType(this.Name);
-            if(nestedType == null) { Debug.Fail("template declaring type dummy instance does not have a nested type corresponding to template"); nestedType = this; }
+
+            if(nestedType == null)
+            {
+                // NOTE: If this fails, it might be exceeding the maximum recursion depth in TypeNode.NestedTypes.
+                // See the comments there for more details.
+                Debug.Fail("template declaring type dummy instance does not have a nested type corresponding to template");
+                nestedType = this;
+            }
+
             if(m == 0) { Debug.Assert(nestedType.template != null); return nestedType; }
+
             return nestedType.GetTemplateInstance(module, null, declaringType, myArgs);
         }
         public virtual TypeNode/*!*/ GetTemplateInstance(Module module, params TypeNode[] typeArguments)
@@ -9842,7 +9858,7 @@ done:
                 // the stack.  The problem is, we can't just ignore all subsequent recursions or it can
                 // throw a different error about a missing template type later on.  The trick is to let it
                 // recurse enough to get all of the information it needs but not enough to overflow the
-                // stack.  The full test case worked at 9 levels of recursion so 20 should be more than
+                // stack.  The full test case worked at 9 levels of recursion so 100 should be more than
                 // enough for any case.  It overflowed at 256 levels of recursion.
                 //
                 // The abbreviated example:
@@ -9867,7 +9883,7 @@ done:
                 // you're wondering, the full test case was the Mass Transit project on GitHub which was
                 // being used as a reference assembly by the person that reported the error.
                 //
-                if(recursionCounter > 20)
+                if(recursionCounter > 100)
                     return null;
 
                 if(this.nestedTypes != null && (this.members == null || this.members.Count == this.memberCount))
@@ -11777,7 +11793,7 @@ returnFullName:
                     result = duplicates[0];
             }
             if(result == null)
-                //First see if the the current module has a class by this name in the empty namespace
+                //First see if the current module has a class by this name in the empty namespace
                 result = this.AssociatedModule.GetType(Identifier.Empty, name);
             if(result == null)
             {
@@ -16358,12 +16374,19 @@ tryNext:
 
         internal TrivialHashtable contextForOffset;
 
+        /// <summary>
+        /// This is used to get or set the source context of the first line of code in the method
+        /// </summary>
+        internal SourceContext FirstLineContext { get; set; }
+
         internal void RecordSequencePoints(ISymUnmanagedMethod methodInfo)
         {
             if(methodInfo == null || this.contextForOffset != null)
                 return;
+
             this.contextForOffset = new TrivialHashtable();
             uint count = methodInfo.GetSequencePointCount();
+
             IntPtr[] docPtrs = new IntPtr[count];
             uint[] startLines = new uint[count];
             uint[] startCols = new uint[count];
@@ -16371,19 +16394,32 @@ tryNext:
             uint[] endCols = new uint[count];
             uint[] offsets = new uint[count];
             uint numPoints;
+            bool firstLineSet = false;
+
             methodInfo.GetSequencePoints(count, out numPoints, offsets, docPtrs, startLines, startCols, endLines, endCols);
             Debug.Assert(count == numPoints);
+
             for(int i = 0; i < count; i++)
             {
-                //The magic hex constant below works around weird data reported from GetSequencePoints.
-                //The constant comes from ILDASM's source code, which performs essentially the same test.
+                // The magic hex constant below works around weird data reported from GetSequencePoints.
+                // The constant comes from ILDASM's source code, which performs essentially the same test.
                 const uint Magic = 0xFEEFEE;
                 if(startLines[i] >= Magic || endLines[i] >= Magic)
                     continue;
                 UnmanagedDocument doc = new UnmanagedDocument(docPtrs[i]);
-                this.contextForOffset[(int)offsets[i] + 1] = new SourceContext(doc,
-                    doc.GetOffset(startLines[i], startCols[i]), doc.GetOffset(endLines[i], endCols[i]));
+
+                SourceContext context = new SourceContext(doc, doc.GetOffset(startLines[i], startCols[i]),
+                    doc.GetOffset(endLines[i], endCols[i]));
+
+                if(!firstLineSet)
+                {
+                    this.FirstLineContext = context;
+                    firstLineSet = true;
+                }
+
+                this.contextForOffset[(int)offsets[i] + 1] = context;
             }
+
             for(int i = 0; i < count; i++)
                 System.Runtime.InteropServices.Marshal.Release(docPtrs[i]);
         }

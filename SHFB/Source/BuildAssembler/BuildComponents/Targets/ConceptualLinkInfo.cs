@@ -19,10 +19,12 @@
 using System;
 using System.Xml.XPath;
 
+using Microsoft.Ddue.Tools.BuildComponent;
+
 namespace Microsoft.Ddue.Tools.Targets
 {
     /// <summary>
-    /// This class is used to hold conceptual link information used by by the
+    /// This class is used to hold conceptual link information used by the
     /// <see cref="ResolveConceptualLinksComponent"/>.
     /// </summary>
     public class ConceptualLinkInfo

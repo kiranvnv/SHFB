@@ -23,6 +23,9 @@
 			<xsl:when test="$v_codeLangLC = 'html' or $v_codeLangLC = 'htm'">
 				<xsl:text>HTML</xsl:text>
 			</xsl:when>
+			<xsl:when test="$v_codeLangLC = 'bat' or $v_codeLangLC = 'batch'">
+				<xsl:text>batch</xsl:text>
+			</xsl:when>
 			<xsl:when test="$v_codeLangLC = 'pshell' or $v_codeLangLC = 'powershell' or $v_codeLangLC = 'ps1'">
 				<xsl:text>PShell</xsl:text>
 			</xsl:when>
@@ -123,12 +126,12 @@
 								</xsl:attribute>
 								<xsl:choose>
 									<xsl:when test="$v_nodeCount = 1">
-										<include item="devlang_{@codeLanguage}" />
+										<include item="devlang_{@codeLanguage}" undefined="{@codeLanguage}"/>
 									</xsl:when>
 									<xsl:otherwise>
 										<!-- Use onclick rather than href or HV 2.0 messes up the link -->
 										<a href="#" onclick="javascript:ChangeTab('{$v_id}','{@style}','{position()}','{$v_nodeCount}');return false;">
-											<include item="devlang_{@codeLanguage}" />
+											<include item="devlang_{@codeLanguage}" undefined="{@codeLanguage}"/>
 										</a>
 									</xsl:otherwise>
 								</xsl:choose>
@@ -150,7 +153,7 @@
 			<div class="OH_CodeSnippetContainerCodeCollection">
 				<div class="OH_CodeSnippetToolBar">
 					<div class="OH_CodeSnippetToolBarText">
-						<a id="{$v_id}_copyCode" href="#" onclick="javascript:CopyToClipboard('{$v_id}');return false;">
+						<a id="{$v_id}_copyCode" href="#" class="OH_copyCodeSnippet" onclick="javascript:CopyToClipboard('{$v_id}');return false;">
 							<includeAttribute name="title" item="copyCode" />
 							<include item="copyCode" />
 						</a>
@@ -247,14 +250,14 @@
 												<xsl:value-of select="@title" />
 											</xsl:when>
 											<xsl:otherwise>
-												<include item="devlang_{@codeLanguage}" />
+												<include item="devlang_{@codeLanguage}" undefined="{@codeLanguage}"/>
 											</xsl:otherwise>
 										</xsl:choose>
 									</xsl:when>
 									<xsl:otherwise>
 										<!-- Use onclick rather than href or HV 2.0 messes up the link -->
 										<a href="#" onclick="javascript:ChangeTab('{$v_id}','{@style}','{position()}','{$v_nodeCount}');return false;">
-											<include item="devlang_{@codeLanguage}" />
+											<include item="devlang_{@codeLanguage}" undefined="{@codeLanguage}"/>
 										</a>
 									</xsl:otherwise>
 								</xsl:choose>
@@ -280,7 +283,7 @@
 			<div class="OH_CodeSnippetContainerCodeCollection">
 				<div class="OH_CodeSnippetToolBar">
 					<div class="OH_CodeSnippetToolBarText">
-						<a id="{$v_id}_copyCode" href="#" onclick="javascript:CopyToClipboard('{$v_id}');return false;">
+						<a id="{$v_id}_copyCode" href="#" class="OH_copyCodeSnippet" onclick="javascript:CopyToClipboard('{$v_id}');return false;">
 							<includeAttribute name="title" item="copyCode" />
 							<include item="copyCode" />
 						</a>
